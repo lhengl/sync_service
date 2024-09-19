@@ -3,41 +3,29 @@ import 'package:collection/collection.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sync_service/srcs/application/application.dart';
-import 'package:sync_service/srcs/data/data.dart';
-
-import 'mock_data.dart';
+import 'package:sync_service/src/application/application.dart';
+import 'package:sync_service/src/data/data.dart';
 
 // https://firebase.flutter.dev/docs/testing/testing/
 // https://pub.dev/packages/fake_cloud_firestore
 void main() async {
   // Initialize Firebase before test
   const user1 = 'userA';
-  // const user2 = 'user2';
-
-  const syncA = 'syncA';
   const deviceA = 'deviceA';
-
-  const syncB = 'syncB';
   const deviceB = 'deviceB';
-
-  const syncC = 'syncC';
   const deviceC = 'deviceC';
-  const mockEntities = FirestoreMockSyncedRepo.mockEntities;
+  const mockEntitiesCollectionPath = MockSyncEntity.mockEntitiesCollectionPath;
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
-  final FirestoreSyncService syncServiceA = initSyncService(
-    syncId: syncA,
+  final syncServiceA = await initSyncService(
     deviceId: deviceA,
     firestore: firestore,
   );
-  final FirestoreSyncService syncServiceB = initSyncService(
-    syncId: syncB,
+  final syncServiceB = await initSyncService(
     deviceId: deviceB,
     firestore: firestore,
   );
-  final FirestoreSyncService syncServiceC = initSyncService(
-    syncId: syncC,
+  final syncServiceC = await initSyncService(
     deviceId: deviceC,
     firestore: firestore,
   );
@@ -45,13 +33,28 @@ void main() async {
   await syncServiceB.startSync(userId: user1);
   await syncServiceC.startSync(userId: user1);
 
-  final syncedRepoA = syncServiceA.delegates.first.syncedRepo as FirestoreSyncedRepo<MockSyncEntity>;
-  final syncedRepoB = syncServiceB.delegates.first.syncedRepo as FirestoreSyncedRepo<MockSyncEntity>;
-  final syncedRepoC = syncServiceC.delegates.first.syncedRepo as FirestoreSyncedRepo<MockSyncEntity>;
+  final syncedRepoA = FirestoreMockSyncedRepo(
+    syncService: syncServiceA,
+    collectionPath: mockEntitiesCollectionPath,
+    firestoreMapper: FirestoreMockSyncEntityMapper(),
+    sembastMapper: SembastMockSyncEntityMapper(),
+  );
+  final syncedRepoB = FirestoreMockSyncedRepo(
+    syncService: syncServiceB,
+    collectionPath: mockEntitiesCollectionPath,
+    firestoreMapper: FirestoreMockSyncEntityMapper(),
+    sembastMapper: SembastMockSyncEntityMapper(),
+  );
+  final syncedRepoC = FirestoreMockSyncedRepo(
+    syncService: syncServiceC,
+    collectionPath: mockEntitiesCollectionPath,
+    firestoreMapper: FirestoreMockSyncEntityMapper(),
+    sembastMapper: SembastMockSyncEntityMapper(),
+  );
   tearDownAll(() async {
-    await syncServiceA.deleteLocalDb();
-    await syncServiceB.deleteLocalDb();
-    await syncServiceC.deleteLocalDb();
+    await syncServiceA.deleteLocalDatabase();
+    await syncServiceB.deleteLocalDatabase();
+    await syncServiceC.deleteLocalDatabase();
   });
 
   test('Test create/update/delete should sync correctly', () async {
@@ -65,9 +68,9 @@ void main() async {
     final singleObjectA = await syncedRepoA.get(singleObjectId);
     final singleObjectB = await syncedRepoB.get(singleObjectId);
     final singleObjectC = await syncedRepoC.get(singleObjectId);
-    expect(singleObject, singleObjectA);
-    expect(singleObject, singleObjectB);
-    expect(singleObject, singleObjectC);
+    expect(singleObjectA, singleObject);
+    expect(singleObjectB, singleObject);
+    expect(singleObjectC, singleObject);
 
     // test update
     singleObject.message = 'singleObject message changed';
@@ -75,8 +78,8 @@ void main() async {
     await Future.delayed(const Duration(milliseconds: 100)); // wait for sync
     final updatedObjectB = await syncedRepoB.get(singleObjectId);
     final updatedObjectC = await syncedRepoC.get(singleObjectId);
-    expect(updatedSingleObjectA, updatedObjectB);
-    expect(updatedSingleObjectA, updatedObjectC);
+    expect(updatedObjectB, updatedSingleObjectA);
+    expect(updatedObjectC, updatedSingleObjectA);
 
     // test delete
     await syncedRepoA.delete(singleObject);
@@ -85,15 +88,18 @@ void main() async {
     await Future.delayed(const Duration(milliseconds: 100));
     final registryBeforeDebounce = await syncServiceA.getOrSetRegistry();
     expect(
-      registryBeforeDebounce.isSigned(deviceId: deviceA, collectionId: mockEntities, docId: singleObjectId),
+      registryBeforeDebounce.isSigned(
+          deviceId: deviceA, collectionId: mockEntitiesCollectionPath, docId: singleObjectId),
       true, // first device should have signed immediately
     );
     expect(
-      registryBeforeDebounce.isSigned(deviceId: deviceB, collectionId: mockEntities, docId: singleObjectId),
+      registryBeforeDebounce.isSigned(
+          deviceId: deviceB, collectionId: mockEntitiesCollectionPath, docId: singleObjectId),
       false, // second device should have debounced
     );
     expect(
-      registryBeforeDebounce.isSigned(deviceId: deviceC, collectionId: mockEntities, docId: singleObjectId),
+      registryBeforeDebounce.isSigned(
+          deviceId: deviceC, collectionId: mockEntitiesCollectionPath, docId: singleObjectId),
       false, // third device should have debounced
     );
 
@@ -101,7 +107,7 @@ void main() async {
     await Future.delayed(const Duration(seconds: 5));
     final registryAfterDebounce = await syncServiceA.getOrSetRegistry();
     expect(
-      registryAfterDebounce.isSignedByAllDevices(collectionId: mockEntities, docId: singleObjectId),
+      registryAfterDebounce.isSignedByAllDevices(collectionId: mockEntitiesCollectionPath, docId: singleObjectId),
       true, // all devices should have signed
     );
 
@@ -109,8 +115,9 @@ void main() async {
     final deletedSingleObjectA = await syncedRepoA.get(singleObjectId);
     final deletedSingleObjectB = await syncedRepoB.get(singleObjectId);
     final deletedSingleObjectC = await syncedRepoB.get(singleObjectId);
-    expect(deletedSingleObjectA, deletedSingleObjectB);
-    expect(deletedSingleObjectA, deletedSingleObjectC);
+    expect(deletedSingleObjectA, isNull);
+    expect(deletedSingleObjectB, isNull);
+    expect(deletedSingleObjectC, isNull);
 
     // The registry should be clean (have no ids)
     await syncServiceA.cleanRegistry();
@@ -122,7 +129,7 @@ void main() async {
     // batch create
     final batchObjects = await syncedRepoA.batchCreate(List.generate(
       10,
-      (index) => MockSyncEntity(id: 'batchObjectId $index', message: 'batchObjectMessage $index'),
+      (index) => MockSyncEntity(id: 'batchObjectId$index', message: 'batchObjectMessage$index'),
     ));
 
     final batchIds = batchObjects.map((e) => e.id).toSet();
@@ -133,9 +140,9 @@ void main() async {
     final batchObjectsB = (await syncedRepoB.batchGet(batchIds)).lastBy((e) => e.id);
     final batchObjectsC = (await syncedRepoC.batchGet(batchIds)).lastBy((e) => e.id);
     for (var object in batchObjects) {
-      expect(object, batchObjectsA[object.id]);
-      expect(object, batchObjectsB[object.id]);
-      expect(object, batchObjectsC[object.id]);
+      expect(batchObjectsA[object.id], object);
+      expect(batchObjectsB[object.id], object);
+      expect(batchObjectsC[object.id], object);
     }
 
     // batch update / and test getAll (which should return all the updated records)
@@ -150,9 +157,9 @@ void main() async {
     final updatedObjectsB = (await syncedRepoB.getAll()).lastBy((e) => e.id);
     final updatedObjectsC = (await syncedRepoC.getAll()).lastBy((e) => e.id);
     for (var object in updatedObjects) {
-      expect(object, updatedObjectsA[object.id]);
-      expect(object, updatedObjectsB[object.id]);
-      expect(object, updatedObjectsC[object.id]);
+      expect(updatedObjectsA[object.id], object);
+      expect(updatedObjectsB[object.id], object);
+      expect(updatedObjectsC[object.id], object);
     }
 
     // since we have 10 items to delete, this is a good place to test all deletes:
@@ -181,15 +188,15 @@ void main() async {
     final registryBeforeDebounce = await syncServiceA.getOrSetRegistry();
 
     expect(
-      registryBeforeDebounce.areSigned(deviceId: deviceA, collectionId: mockEntities, docIds: deletedIds),
+      registryBeforeDebounce.areSigned(deviceId: deviceA, collectionId: mockEntitiesCollectionPath, docIds: deletedIds),
       true, // first device should have signed immediately
     );
     expect(
-      registryBeforeDebounce.areSigned(deviceId: deviceB, collectionId: mockEntities, docIds: deletedIds),
+      registryBeforeDebounce.areSigned(deviceId: deviceB, collectionId: mockEntitiesCollectionPath, docIds: deletedIds),
       false, // second device should have debounced
     );
     expect(
-      registryBeforeDebounce.areSigned(deviceId: deviceC, collectionId: mockEntities, docIds: deletedIds),
+      registryBeforeDebounce.areSigned(deviceId: deviceC, collectionId: mockEntitiesCollectionPath, docIds: deletedIds),
       false, // third device should have debounced
     );
 
@@ -197,7 +204,7 @@ void main() async {
     await Future.delayed(const Duration(seconds: 5));
     final registryAfterDebounce = await syncServiceA.getOrSetRegistry();
     expect(
-      registryAfterDebounce.areSignedByAllDevices(collectionId: mockEntities, docIds: deletedIds),
+      registryAfterDebounce.areSignedByAllDevices(collectionId: mockEntitiesCollectionPath, docIds: deletedIds),
       true, // all devices should have signed all deleted ids
     );
 
@@ -230,27 +237,21 @@ void main() async {
   });
 }
 
-FirestoreSyncService initSyncService({
-  required String syncId,
+Future<SyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
-}) {
-  return SyncService.init(
-    MockFirestoreSyncService(
-      syncId: syncId,
-      deviceId: deviceId,
-      firestore: firestore,
-      // for testing purpose, make the debounce 3 seconds, to test the debounce make sure to delay more than 3 seconds
-      signingDebounce: const Duration(seconds: 3),
-      delegates: [
-        FirestoreSyncDelegate<MockSyncEntity>(
-          syncQuery: (collection, userId) {
-            return collection;
-          },
-          syncedRepo: FirestoreMockSyncedRepo(syncId: syncId),
-          remoteRepo: FirestoreMockRemoteRepo(),
-        ),
-      ],
-    ),
-  );
+}) async {
+  return MockFirestoreSyncService(
+    firestore: firestore,
+    // for testing purpose, make the debounce 3 seconds, to test the debounce make sure to delay more than 3 seconds
+    signingDebounce: const Duration(seconds: 3),
+    delegates: [
+      FirestoreSyncDelegate<MockSyncEntity>(
+        collectionPath: 'mockEntities',
+        syncQuery: (collection, userId) => collection,
+        firestoreMapper: FirestoreMockSyncEntityMapper(),
+        sembastMapper: SembastMockSyncEntityMapper(),
+      ),
+    ],
+  ).init(deviceId: deviceId);
 }

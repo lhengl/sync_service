@@ -1,15 +1,11 @@
-import 'package:example/data_tile.dart';
-import 'package:example/home_page_controller.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:sync_service/sync_service.dart';
+part of 'firestore_deletion_registry.dart';
 
-class ServiceBView extends GetView<HomePageController> {
-  SyncService get syncServiceB => Get.find(tag: Constants.serviceB);
+class ServiceAView extends GetView<FirestoreDeletionRegistryController> {
+  FirestoreSyncService get syncServiceA => Get.find(tag: Constants.serviceA);
 
-  FirestoreMockSyncedRepo get syncedRepo => Get.find(tag: Constants.serviceB);
+  FakeFirestoreSyncedRepo get syncedRepo => Get.find(tag: Constants.serviceA);
 
-  const ServiceBView({super.key});
+  const ServiceAView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -30,16 +26,16 @@ class ServiceBView extends GetView<HomePageController> {
           ),
           // when I stopped the sync, the database will get closed,
           // which will cause any listeners to close as well
-          controller.syncStateB.value == SyncState.stopped
+          controller.syncStateA.value == SyncState.stopped
               ? OutlinedButton(
                   onPressed: () {
-                    syncServiceB.startSync(userId: Constants.userA);
+                    syncServiceA.startSync(userId: Constants.userA);
                   },
                   child: const Text('Start sync'),
                 )
               : OutlinedButton(
                   onPressed: () async {
-                    await syncServiceB.stopSync();
+                    await syncServiceA.stopSync();
                     // When the sync stop, the local database is closed, so all listeners will
                     // be retired. It might be a good idea to separate database connection and sync.
                   },
@@ -47,17 +43,16 @@ class ServiceBView extends GetView<HomePageController> {
                 ),
           OutlinedButton(
             onPressed: () async {
-              final registry = await syncServiceB.getOrSetRegistry();
+              final registry = await syncServiceA.getOrSetRegistry();
               debugPrint('$registry');
             },
-            child: const Text('syncServiceB.getRegistry'),
+            child: const Text('syncServiceA.getOrSetRegistry'),
           ),
           OutlinedButton(
             onPressed: () async {
-              final registry = await syncServiceB.cleanRegistry();
-              debugPrint('$registry');
+              await syncServiceA.cleanRegistry();
             },
-            child: const Text('syncServiceB.cleanRegistry'),
+            child: const Text('syncServiceA.cleanRegistry'),
           ),
           Card(
             color: Colors.blue,
@@ -75,15 +70,15 @@ class ServiceBView extends GetView<HomePageController> {
                   rows: [
                     DataRow(cells: [
                       DataCell(Text('deviceId')),
-                      DataCell(Text(syncServiceB.deviceId)),
+                      DataCell(Text(syncServiceA.deviceId)),
                     ]),
                     DataRow(cells: [
                       DataCell(Text('userId')),
-                      DataCell(Text(syncServiceB.userId)),
+                      DataCell(Text(syncServiceA.userId)),
                     ]),
                     DataRow(cells: [
                       DataCell(Text('syncState')),
-                      DataCell(Text(controller.syncStateB.value.name)),
+                      DataCell(Text(controller.syncStateA.value.name)),
                     ]),
                   ],
                 ),
@@ -93,9 +88,9 @@ class ServiceBView extends GetView<HomePageController> {
           ListView.separated(
             shrinkWrap: true,
             physics: NeverScrollableScrollPhysics(),
-            itemBuilder: (__, index) => DataTile(data: controller.syncedDataB[index]),
+            itemBuilder: (__, index) => DataTile(data: controller.syncedDataA[index]),
             separatorBuilder: (__, index) => Divider(),
-            itemCount: controller.syncedDataB.length,
+            itemCount: controller.syncedDataA.length,
           ),
         ],
       );

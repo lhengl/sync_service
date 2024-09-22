@@ -1,10 +1,6 @@
-import 'package:example/data_tile.dart';
-import 'package:example/home_page_controller.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:sync_service/sync_service.dart';
+part of 'firestore_deletion_registry.dart';
 
-class RemoteView extends GetView<HomePageController> {
+class RemoteView extends GetView<FirestoreDeletionRegistryController> {
   FirestoreMockRemoteRepo get remoteRepo => Get.find();
 
   const RemoteView({super.key});

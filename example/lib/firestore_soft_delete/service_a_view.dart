@@ -1,15 +1,11 @@
-import 'package:example/data_tile.dart';
-import 'package:example/home_page_controller.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:sync_service/sync_service.dart';
+part of 'firestore_soft_delete.dart';
 
-class ServiceAView extends GetView<HomePageController> {
-  SyncService get syncServiceA => Get.find(tag: Constants.serviceA);
+class SoftServiceAView extends GetView<FirestoreSoftDeleteController> {
+  FirestoreSoftSyncService get syncServiceA => Get.find(tag: Constants.serviceA);
 
-  FirestoreMockSyncedRepo get syncedRepo => Get.find(tag: Constants.serviceA);
+  FakeFirestoreSoftSyncedRepo get syncedRepo => Get.find(tag: Constants.serviceA);
 
-  const ServiceAView({super.key});
+  const SoftServiceAView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -47,16 +43,9 @@ class ServiceAView extends GetView<HomePageController> {
                 ),
           OutlinedButton(
             onPressed: () async {
-              final registry = await syncServiceA.getOrSetRegistry();
-              debugPrint('$registry');
+              await syncServiceA.disposeOldTrash();
             },
-            child: const Text('syncServiceA.getOrSetRegistry'),
-          ),
-          OutlinedButton(
-            onPressed: () async {
-              await syncServiceA.cleanRegistry();
-            },
-            child: const Text('syncServiceA.cleanRegistry'),
+            child: const Text('Dispose old trash'),
           ),
           Card(
             color: Colors.blue,
@@ -89,12 +78,19 @@ class ServiceAView extends GetView<HomePageController> {
               ],
             ),
           ),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            itemBuilder: (__, index) => DataTile(data: controller.syncedDataA[index]),
-            separatorBuilder: (__, index) => Divider(),
-            itemCount: controller.syncedDataA.length,
+          ExpansionTile(
+            initiallyExpanded: true,
+            title: Text('Cached records'),
+            children: List.generate(controller.syncedDataA.length, (index) {
+              return DataTile(data: controller.syncedDataA[index]);
+            }),
+          ),
+          ExpansionTile(
+            initiallyExpanded: true,
+            title: Text('Cached trash'),
+            children: List.generate(controller.trashDataA.length, (index) {
+              return DataTile(data: controller.trashDataA[index]);
+            }),
           ),
         ],
       );

@@ -1,10 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:sync_service/sync_service.dart';
+part of 'firestore_deletion_registry.dart';
 
-import 'home_page_controller.dart';
-
-class RegistryView extends GetView<HomePageController> {
+class RegistryView extends GetView<FirestoreDeletionRegistryController> {
   const RegistryView({super.key});
 
   DeletionRegistry get registry => controller.registry.value;

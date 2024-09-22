@@ -1,6 +1,16 @@
-import 'package:dart_mappable/dart_mappable.dart';
+part of 'deletion_registry_impl.dart';
 
-part 'deletion_registry.mapper.dart';
+class FirestoreDeletionRegistryMapper extends JsonMapper<DeletionRegistry> {
+  @override
+  DeletionRegistry fromMap(Map<String, dynamic> map) {
+    return DeletionRegistry.fromMap(map);
+  }
+
+  @override
+  Map<String, dynamic> toMap(DeletionRegistry value) {
+    return value.toMap();
+  }
+}
 
 /// This registry is stored per collection
 /// This is important to reconcile the sync state during an extended offline period.

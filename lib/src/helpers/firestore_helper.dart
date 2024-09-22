@@ -1,5 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+mixin FirestoreHelper {
+  /// Split values into batch of 10 size for queries that only support a limited number of value such as WhereIn
+  List<List<String>> splitBatch(Set<String> values, {int batchSize = 10}) {
+    final List<List<String>> idBatches = [];
+    for (var i = 0; i < values.length; i += batchSize) {
+      idBatches.add(values.skip(i).take(batchSize).toList());
+    }
+    return idBatches;
+  }
+}
+
 extension FirestoreQuerySnapshotExtension<T> on QuerySnapshot<T> {
   /// A convenient method to return the document data
   List<T> get data => docs.map((doc) => doc.data()).toList();

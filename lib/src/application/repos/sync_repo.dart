@@ -22,9 +22,6 @@ abstract class SyncedRepo<T extends SyncEntity> with Loggable {
 
   Future<DateTime> get currentTime async => (await FlutterKronos.getNtpDateTime ?? DateTime.now()).toUtc();
 
-  // deletion registry
-  Future<void> signDeletions({required Set<String> ids});
-
   // CRUD OPTIONS
 
   Future<T?> get(String id);

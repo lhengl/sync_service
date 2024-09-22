@@ -23,6 +23,7 @@ dependencies:
   duration: ^4.0.3
   flutter_kronos: ^0.1.0+1
   collection: ^1.18.0
+  mocktail: ^1.0.4
 
 dev_dependencies:
   flutter_test:

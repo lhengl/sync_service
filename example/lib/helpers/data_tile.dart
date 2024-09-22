@@ -7,7 +7,7 @@ class DataTile extends StatelessWidget {
     required this.data,
   });
 
-  final MockSyncEntity data;
+  final FakeSyncEntity data;
 
   @override
   Widget build(BuildContext context) {

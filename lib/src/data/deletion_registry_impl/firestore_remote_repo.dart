@@ -1,11 +1,4 @@
-import 'dart:async';
-
-import 'package:cloud_firestore/cloud_firestore.dart' as fs;
-
-import '../../application/repos/remote_repo.dart';
-import '../../domain/entities/sync_entity.dart';
-import '../../helpers/firestore_helper.dart';
-import '../data.dart';
+part of 'deletion_registry_impl.dart';
 
 /// This implementation is an online first approach. It interfaces directly with firestore remote database.
 /// It does not know what is in the cache.
@@ -26,7 +19,7 @@ import '../data.dart';
 /// - Will sign the deletion on the deletion registry to ensure deletions are synced
 /// - It is important to always sign the deletion to avoid stale/deleted data living forever rent free in cache
 /// - Always sign deletion in a batch operation by calling [signDeletions] to ensure atomicity
-abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
+abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
   // service
   @override
   FirestoreSyncService get syncService => super.syncService as FirestoreSyncService;
@@ -83,7 +76,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<T> update(T value) async {
-    devLog(' update: id=${value.id}');
+    devLog('update: id=${value.id}');
 
     // setup
     value = value.clone();
@@ -96,13 +89,13 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<T> upsert(T value) async {
-    devLog(' upsert: id=${value.id}');
+    devLog('upsert: id=${value.id}');
     return update(value);
   }
 
   @override
   Future<T> delete(T value) async {
-    devLog(' delete: id=${value.id}');
+    devLog('delete: id=${value.id}');
     final batch = firestore.batch();
     batch.delete(typedCollection.doc(value.id));
     // Deletion signage must be done as part of a batch to ensure integrity of data
@@ -113,7 +106,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<T?> deleteById(String id) async {
-    devLog(' deleteById: id=$id');
+    devLog('deleteById: id=$id');
     final value = await get(id);
     if (value == null) {
       return null;
@@ -129,7 +122,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
     if (ids.isEmpty) {
       return [];
     }
-    List<List<String>> idBatches = _splitBatch(ids);
+    List<List<String>> idBatches = splitBatch(ids);
     final futures = idBatches.map((idBatch) {
       return typedCollection.where(fs.FieldPath.documentId, whereIn: idBatch).get();
     });
@@ -141,18 +134,9 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
     return expanded;
   }
 
-  /// Split values into batch of 10 size for queries that only support a limited number of value such as WhereIn
-  List<List<String>> _splitBatch(Set<String> values, {int batchSize = 10}) {
-    final List<List<String>> idBatches = [];
-    for (var i = 0; i < values.length; i += batchSize) {
-      idBatches.add(values.skip(i).take(batchSize).toList());
-    }
-    return idBatches;
-  }
-
   @override
   Future<List<T>> batchCreate(List<T> values) async {
-    devLog(' batchCreate: count=${values.length}');
+    devLog('batchCreate: count=${values.length}');
     // if empty, nothing to do
     if (values.isEmpty) {
       return values;
@@ -180,7 +164,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<List<T>> batchUpdate(List<T> values) async {
-    devLog(' batchUpdate: count=${values.length}');
+    devLog('batchUpdate: count=${values.length}');
     // if empty, nothing to do
     if (values.isEmpty) {
       return values;
@@ -210,13 +194,13 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<List<T>> batchUpsert(List<T> values) async {
-    devLog(' batchUpsert: count=${values.length}');
+    devLog('batchUpsert: count=${values.length}');
     return batchUpdate(values);
   }
 
   @override
   Future<List<T>> batchDelete(List<T> values) async {
-    devLog(' batchDelete: count=${values.length}');
+    devLog('batchDelete: count=${values.length}');
     // if empty, nothing to do
     if (values.isEmpty) {
       return values;
@@ -245,7 +229,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<List<T>> batchDeleteByIds(Set<String> ids) async {
-    devLog(' batchDeleteByIds: ids=$ids');
+    devLog('batchDeleteByIds: ids=$ids');
     final values = await batchGet(ids);
     return batchDelete(values);
   }
@@ -254,23 +238,23 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
 
   @override
   Future<List<T>> getAll() async {
-    devLog(' getAll');
+    devLog('getAll');
     final snapshot = await typedCollection.get();
     return snapshot.data;
   }
 
   @override
   Stream<List<T>> watchAll() {
-    devLog(' watchAll');
+    devLog('watchAll');
     return typedCollection.snapshots().map((e) => e.data);
   }
 
   @override
   Future<List<T>> deleteAll() async {
-    devLog(' deleteAll');
+    devLog('deleteAll');
     final allDocs = await getAll();
     await batchDelete(allDocs);
-    devLog(' deleteAll: Deleted ${allDocs.length} from cache/remote documents');
+    devLog('deleteAll: Deleted ${allDocs.length} from cache/remote documents');
     return allDocs;
   }
 
@@ -280,7 +264,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> {
   /// Doing so will sign the registry for deletion.
   /// However, if you need to delete a record outside of these default methods, ensure to call [signDeletions]
   /// as part of a batch operation. Otherwise the devices will go out of sync without notice.
-  /// [FirestoreSyncDelegate.watchRemoteChanges] will also sign the registry during a deletion,
+  /// [FirestoreSyncDelegate._watchRemoteChanges] will also sign the registry during a deletion,
   /// but is only intended only for other devices not the same device. It does not guarantee atomicity.
   ///
   /// ----- SO DON'T FORGET to sign the registry on each deletion. ------

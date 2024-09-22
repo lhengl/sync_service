@@ -1,26 +1,55 @@
-import 'dart:async';
-
-import 'package:cloud_firestore/cloud_firestore.dart' as fs;
-import 'package:collection/collection.dart';
-import 'package:duration/duration.dart';
-import 'package:easy_debounce/easy_debounce.dart';
-import 'package:path/path.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:sembast/sembast.dart' as sb;
-import 'package:sembast/sembast_io.dart';
-
-import '../../application/services/sync_service.dart';
-import '../../domain/entities/deletion_registry.dart';
-import '../../helpers/loggable.dart';
-import '../mappers/firestore_deletion_registry_mapper.dart';
-import 'firestore_sync_delegate.dart';
+part of 'deletion_registry_impl.dart';
 
 /// Sync service must be started each time a user logs into a session
 /// It manages the lifecycle of each sync delegate during the user session
 class FirestoreSyncService extends SyncService with Loggable {
+  /// This is the time to live duration that a device can be offline before its cache may be invalidated.
+  ///
+  /// The reason why we need this is because if a device goes offline indefinitely,
+  /// then it will never sign any deletion. Or if it goes offline for too long then the deletion
+  /// registry may become to large which will slow the cleaning process and increase network egress.
+  ///
+  /// The default value is 14 days.
+  ///
+  /// This means that if a device goes offline for 14 days, then the next time it boots up, the registry will check
+  /// if the device was the last synced. If it is, then the device is considered to be in sync because no other devices
+  /// have tampered. However, if another device has synced, then the cache will be invalidated.
+  final Duration offlineDeviceTtl;
+
+  /// The number of retries when a sync operation fails. Defaults to 3.
+  final int retriesOnFailure;
+
+  /// The duration between retries when sync operation fails. Defaults to 3 seconds.
+  final Duration retryInterval;
+
+  /// The minimum interval for signing deletion. That is, signing will occur in real time,
+  /// but is throttled to save writes. Defaults to 1 minute. So if a user deletes 1 document, then all synced services
+  /// will delete that 1 document immediately. However, subsequent deletes won't be synced until after 1 minute.
+  final Duration signingDebounce;
+
+  final DatabaseProvider databaseProvider;
+
+  FirestoreSyncService({
+    required List<FirestoreSyncDelegate> delegates,
+    super.deviceIdProvider,
+    super.timestampProvider,
+    required this.firestore,
+    this.deletionRegistryPath = 'deletionRegistry',
+    DatabaseProvider? databaseProvider,
+    Duration? offlineDeviceTtl,
+    int? retriesOnFailure = 3,
+    Duration? retryInterval,
+    Duration? signingDebounce,
+  })  : offlineDeviceTtl = const Duration(days: 14),
+        retriesOnFailure = retriesOnFailure ?? 3,
+        retryInterval = retryInterval ?? const Duration(seconds: 3),
+        signingDebounce = signingDebounce ?? const Duration(minutes: 1),
+        databaseProvider = databaseProvider ?? DatabaseProvider(),
+        super(delegates: delegates);
+
+  // firestore
   final fs.FirebaseFirestore firestore;
-  late sb.Database _sembastDb;
-  sb.Database get sembastDb => _sembastDb;
+  sb.Database get sembastDb => databaseProvider.sembastDb;
 
   @override
   List<FirestoreSyncDelegate> get delegates => super.delegates as List<FirestoreSyncDelegate>;
@@ -38,15 +67,49 @@ class FirestoreSyncService extends SyncService with Loggable {
     },
   );
 
-  FirestoreSyncService({
-    required List<FirestoreSyncDelegate> delegates,
-    super.offlineDeviceTtl,
-    super.retriesOnFailure,
-    super.retryInterval,
-    required this.firestore,
-    super.signingDebounce,
-    this.deletionRegistryPath = 'deletionRegistry',
-  }) : super(delegates: delegates);
+  @override
+  Future<void> beforeStarting() async {
+    devLog('$debugDetails beforeStarting: waiting for local database to be ready...');
+    await databaseProvider.closeLocalDatabase(); // close the previous database
+    await databaseProvider.getOrOpenLocalDatabase(userId: userId, deviceId: deviceId);
+
+    devLog('$debugDetails beforeStarting: cleaning and validating registry...');
+    await cleanAndValidateCache();
+  }
+
+  @override
+  Future<void> dispose() async {
+    await super.dispose();
+    await databaseProvider.closeLocalDatabase();
+  }
+
+  Future<void> cleanAndValidateCache() async {
+    devLog('$debugDetails cleanAndValidate: signing registry for the first time...');
+
+    final cleanedRegistry = await RetryHelper(
+      retries: retriesOnFailure,
+      retryInterval: retryInterval,
+      future: () async {
+        devLog('$debugDetails cleanAndValidate: cleaning registry...');
+        return cleanRegistry();
+      },
+    ).retry();
+
+    if (cleanedRegistry.cacheIsInvalid(deviceId)) {
+      devLog('$debugDetails cleanAndValidate: No device found on registry. Cache is invalid and must be cleared.');
+      await RetryHelper(
+        retries: retriesOnFailure,
+        retryInterval: retryInterval,
+        future: () async {
+          for (var delegate in delegates) {
+            devLog('$debugDetails cleanAndValidate: Clearing cache for "${delegate.collectionPath}"...');
+            await delegate.clearCache();
+            devLog('$debugDetails cleanAndValidate: Cached cleared for "${delegate.collectionPath}".');
+          }
+        },
+      ).retry();
+    }
+  }
 
   /// To clean the registry, it is important to do so in a transaction where
   /// the read and write operation must be done atomically to ensure that the cleaning is not
@@ -59,7 +122,6 @@ class FirestoreSyncService extends SyncService with Loggable {
   /// 6. Commit the transaction, if it fails, then all changes wll be rolled back.
   ///
   /// Returns a clean COPY of the registry
-  @override
   Future<DeletionRegistry> cleanRegistry() async {
     final currentTime = await this.currentTime;
     devLog(
@@ -110,7 +172,6 @@ class FirestoreSyncService extends SyncService with Loggable {
 
   /// This is called by delegates to queue a set of ids for deletion in a collection
   /// This will invoke [signDeletions] not more than once every [signingDebounce] interval
-  @override
   void queueSigning(String collection, Set<String> ids) {
     (_singingQueue[collection] ??= {}).addAll(ids);
     signDeletions();
@@ -139,7 +200,6 @@ class FirestoreSyncService extends SyncService with Loggable {
   /// then signing may fire again - signing 'ids' that have already been removed. This will rectify itself when all
   /// devices complete their next clean up. However, this constant resigning can enter into an infinite cycle.
   /// To avoid this, the debounce must be cancelled if a cleaning is started.
-  @override
   Future<void> signDeletions() async {
     _signingCalls++;
     devLog('$debugDetails signDeletions: _signingCalls=$_signingCalls');
@@ -189,7 +249,7 @@ class FirestoreSyncService extends SyncService with Loggable {
     }
   }
 
-  @override
+  /// Returns the deletion registry for the user, if empty set it first before returning it.
   Future<DeletionRegistry> getOrSetRegistry() async {
     devLog('$debugDetails getOrSetRegistry: userId=$userId');
     final doc = deletionTypedCollection.doc(userId);
@@ -202,40 +262,7 @@ class FirestoreSyncService extends SyncService with Loggable {
     return registry;
   }
 
-  @override
   Stream<DeletionRegistry> watchRegistry() {
     return deletionTypedCollection.doc(userId).snapshots().map((e) => e.data() ?? DeletionRegistry(userId: userId));
-  }
-
-  @override
-  Future<sb.Database> getOrOpenLocalDatabase() async {
-    try {
-      return _sembastDb;
-    } catch (e) {
-      if (userId.isEmpty) {
-        throw Exception('To open a user database, userId must not be empty');
-      }
-
-      try {
-        final dir = await getApplicationDocumentsDirectory();
-        await dir.create(recursive: true);
-        final dbPath = join(dir.path, '${deviceId}_$userId.db');
-        _sembastDb = await databaseFactoryIo.openDatabase(dbPath);
-        return _sembastDb;
-      } catch (e) {
-        throw Exception('Error opening database: $e');
-      }
-    }
-  }
-
-  @override
-  Future<void> closeLocalDatabase() async {
-    await _sembastDb.close();
-  }
-
-  @override
-  Future<void> deleteLocalDatabase() async {
-    await _sembastDb.close();
-    await databaseFactoryIo.deleteDatabase(_sembastDb.path);
   }
 }

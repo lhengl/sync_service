@@ -1,14 +1,7 @@
-import 'package:example/registry_view.dart';
-import 'package:example/remote_view.dart';
-import 'package:example/service_a_view.dart';
-import 'package:example/service_b_view.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+part of 'firestore_soft_delete.dart';
 
-import 'home_page_controller.dart';
-
-class HomePage extends GetView<HomePageController> {
-  const HomePage({super.key});
+class FirestoreSoftDeletePage extends GetView<FirestoreSoftDeleteController> {
+  const FirestoreSoftDeletePage({super.key});
   @override
   Widget build(BuildContext context) {
     return controller.obx(
@@ -18,7 +11,7 @@ class HomePage extends GetView<HomePageController> {
             length: 4,
             child: Scaffold(
               appBar: AppBar(
-                title: const Text('Sync Service Example'),
+                title: const Text('Firestore Soft Delete Implementation'),
                 bottom: TabBar(tabs: [
                   Tab(child: Text('Remote')),
                   Tab(child: Text(Constants.serviceA)),
@@ -28,10 +21,10 @@ class HomePage extends GetView<HomePageController> {
               ),
               body: TabBarView(
                 children: [
-                  RemoteView(),
-                  ServiceAView(),
-                  ServiceBView(),
-                  RegistryView(),
+                  SoftRemoteView(),
+                  SoftServiceAView(),
+                  SoftServiceBView(),
+                  DisposalRegistryView(),
                 ],
               ),
             ));

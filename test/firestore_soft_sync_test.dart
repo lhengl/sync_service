@@ -32,23 +32,17 @@ void main() async {
   await syncServiceB.startSync(userId: user1);
   await syncServiceC.startSync(userId: user1);
 
-  final syncedRepoA = FakeFirestoreSyncedRepo(
+  final syncedRepoA = FakeFirestoreSoftSyncedRepo(
     syncService: syncServiceA,
     collectionPath: FakeSyncEntity.collectionPath,
-    firestoreMapper: FakeFirestoreSyncEntityMapper(),
-    sembastMapper: FakeSembastSyncEntityMapper(),
   );
-  final syncedRepoB = FakeFirestoreSyncedRepo(
+  final syncedRepoB = FakeFirestoreSoftSyncedRepo(
     syncService: syncServiceB,
     collectionPath: FakeSyncEntity.collectionPath,
-    firestoreMapper: FakeFirestoreSyncEntityMapper(),
-    sembastMapper: FakeSembastSyncEntityMapper(),
   );
-  final syncedRepoC = FakeFirestoreSyncedRepo(
+  final syncedRepoC = FakeFirestoreSoftSyncedRepo(
     syncService: syncServiceC,
     collectionPath: FakeSyncEntity.collectionPath,
-    firestoreMapper: FakeFirestoreSyncEntityMapper(),
-    sembastMapper: FakeSembastSyncEntityMapper(),
   );
   tearDownAll(() async {
     await syncServiceA.databaseProvider.deleteLocalDatabase();
@@ -85,30 +79,6 @@ void main() async {
 
     // wait for 100ms to wait for sync and check that all devices have signed the deletion
     await Future.delayed(const Duration(milliseconds: 100));
-    final registryBeforeDebounce = await syncServiceA.getOrSetRegistry();
-    expect(
-      registryBeforeDebounce.isSigned(
-          deviceId: deviceA, collectionId: FakeSyncEntity.collectionPath, docId: singleObjectId),
-      true, // first device should have signed immediately
-    );
-    expect(
-      registryBeforeDebounce.isSigned(
-          deviceId: deviceB, collectionId: FakeSyncEntity.collectionPath, docId: singleObjectId),
-      false, // second device should have debounced
-    );
-    expect(
-      registryBeforeDebounce.isSigned(
-          deviceId: deviceC, collectionId: FakeSyncEntity.collectionPath, docId: singleObjectId),
-      false, // third device should have debounced
-    );
-
-    // wait for a further 5 seconds (longer than the debounce) to check that ids have been signed correctly
-    await Future.delayed(const Duration(seconds: 5));
-    final registryAfterDebounce = await syncServiceA.getOrSetRegistry();
-    expect(
-      registryAfterDebounce.isSignedByAllDevices(collectionId: FakeSyncEntity.collectionPath, docId: singleObjectId),
-      true, // all devices should have signed
-    );
 
     // all docs should be deleted from all devices
     final deletedSingleObjectA = await syncedRepoA.get(singleObjectId);
@@ -117,11 +87,6 @@ void main() async {
     expect(deletedSingleObjectA, isNull);
     expect(deletedSingleObjectB, isNull);
     expect(deletedSingleObjectC, isNull);
-
-    // The registry should be clean (have no ids)
-    await syncServiceA.cleanRegistry();
-    final cleanedRegistry = await syncServiceA.getOrSetRegistry();
-    expect(cleanedRegistry.isClean(), true);
   });
 
   test('Test batch create/update/delete should sync correctly', () async {
@@ -169,46 +134,13 @@ void main() async {
     final batchDelete = updatedObjects.getRange(2, 5).toList(); // 3 count
     final batchDeleteByIds = updatedObjects.getRange(5, 8).map((e) => e.id); // 3 count
 
-    final deleted = await syncedRepoA.delete(singleDelete);
-    final deletedById = await syncedRepoA.deleteById(singleDeleteById.id);
-    final batchDeleted = await syncedRepoA.batchDelete(batchDelete);
-    final batchDeletedByIds = await syncedRepoA.batchDeleteByIds(batchDeleteByIds.toSet());
-
-    final deletedObjectsA = [
-      deleted,
-      deletedById!,
-      ...batchDeleted,
-      ...batchDeletedByIds,
-    ];
-    final deletedIds = deletedObjectsA.map((e) => e.id).toSet();
+    await syncedRepoA.delete(singleDelete);
+    await syncedRepoA.deleteById(singleDeleteById.id);
+    await syncedRepoA.batchDelete(batchDelete);
+    await syncedRepoA.batchDeleteByIds(batchDeleteByIds.toSet());
 
     // wait for sync and check that all devices have signed the deletion
     await Future.delayed(const Duration(milliseconds: 100));
-    final registryBeforeDebounce = await syncServiceA.getOrSetRegistry();
-
-    expect(
-      registryBeforeDebounce.areSigned(
-          deviceId: deviceA, collectionId: FakeSyncEntity.collectionPath, docIds: deletedIds),
-      true, // first device should have signed immediately
-    );
-    expect(
-      registryBeforeDebounce.areSigned(
-          deviceId: deviceB, collectionId: FakeSyncEntity.collectionPath, docIds: deletedIds),
-      false, // second device should have debounced
-    );
-    expect(
-      registryBeforeDebounce.areSigned(
-          deviceId: deviceC, collectionId: FakeSyncEntity.collectionPath, docIds: deletedIds),
-      false, // third device should have debounced
-    );
-
-    // wait for a further 5 seconds (longer than the debounce) to wait for debounce to fire
-    await Future.delayed(const Duration(seconds: 5));
-    final registryAfterDebounce = await syncServiceA.getOrSetRegistry();
-    expect(
-      registryAfterDebounce.areSignedByAllDevices(collectionId: FakeSyncEntity.collectionPath, docIds: deletedIds),
-      true, // all devices should have signed all deleted ids
-    );
 
     // there should be 2 remaining docs
     final remainingA = await syncedRepoA.getAll();
@@ -221,8 +153,8 @@ void main() async {
     // now delete all docs
     await syncedRepoA.deleteAll();
 
-    // wait for debounce to sync
-    await Future.delayed(const Duration(seconds: 5));
+    // wait for sync
+    await Future.delayed(const Duration(milliseconds: 100));
 
     // all docs should be deleted from all devices
     final allA = await syncedRepoA.getAll();
@@ -231,27 +163,21 @@ void main() async {
     expect(allA.isEmpty, true);
     expect(allB.isEmpty, true);
     expect(allC.isEmpty, true);
-
-    // The registry should be clean (have no ids)
-    await syncServiceA.cleanRegistry();
-    final cleanedRegistry = await syncServiceA.getOrSetRegistry();
-    expect(cleanedRegistry.isClean(), true);
   });
 }
 
-Future<FirestoreSyncService> initSyncService({
+Future<FirestoreSoftSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
 }) async {
-  return FirestoreSyncService(
+  return FirestoreSoftSyncService(
     databaseProvider: FakeDatabaseProvider(),
     timestampProvider: const FakeTimeStampProvider(),
     deviceIdProvider: FakeDeviceIdProvider(deviceId),
     firestore: firestore,
     // for testing purpose, make the debounce 3 seconds, to test the debounce make sure to delay more than 3 seconds
-    signingDebounce: const Duration(seconds: 3),
     delegates: [
-      FirestoreSyncDelegate<FakeSyncEntity>(
+      FirestoreSoftSyncDelegate<FakeSyncEntity>(
         collectionPath: FakeSyncEntity.collectionPath,
         syncQuery: (collection, userId) => collection,
         firestoreMapper: FakeFirestoreSyncEntityMapper(),

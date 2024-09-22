@@ -1,9 +1,8 @@
-export 'mappers/firestore_deletion_registry_mapper.dart';
+export 'deletion_registry_impl/deletion_registry_impl.dart';
+export 'fakes/fake_data.dart';
+export 'fakes/fake_firestore_soft_sync_service.dart';
+export 'fakes/fake_firestore_sync_service.dart';
 export 'mappers/json_mapper.dart';
-export 'mock/mock_data.dart';
-export 'models/firestore_collection.dart';
-export 'models/sembast_collection.dart';
-export 'repos/firestore_remote_repo.dart';
-export 'repos/firestore_synced_repo.dart';
-export 'services/firestore_sync_delegate.dart';
-export 'services/firestore_sync_service.dart';
+export 'models/sync_query.dart';
+export 'services/database_provider.dart';
+export 'soft_deletion_impl/soft_deletion_impl.dart';

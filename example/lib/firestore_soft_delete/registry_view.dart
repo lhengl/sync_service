@@ -4,7 +4,7 @@ class DisposalRegistryView extends GetView<FirestoreSoftDeleteController> {
   const DisposalRegistryView({super.key});
 
   DisposalRegistry get registry => controller.registry.value;
-  FirestoreSoftSyncService get syncServiceA => Get.find(tag: Constants.serviceA);
+  FirestoreSoftSyncService get syncServiceA => controller.syncServiceA;
 
   @override
   Widget build(BuildContext context) {

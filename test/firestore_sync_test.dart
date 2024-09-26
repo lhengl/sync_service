@@ -16,44 +16,49 @@ void main() async {
   const deviceC = 'deviceC';
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
+  final collectionProvider = CollectionProvider(
+    collections: [
+      FirestoreCollectionInfo(
+        path: FakeSyncEntity.collectionPath,
+        syncQuery: (collection, userId) => collection,
+      ),
+    ],
+  );
   final syncServiceA = await initSyncService(
     deviceId: deviceA,
     firestore: firestore,
+    collectionProvider: collectionProvider,
   );
   final syncServiceB = await initSyncService(
     deviceId: deviceB,
     firestore: firestore,
+    collectionProvider: collectionProvider,
   );
   final syncServiceC = await initSyncService(
     deviceId: deviceC,
     firestore: firestore,
+    collectionProvider: collectionProvider,
   );
   await syncServiceA.startSync(userId: user1);
   await syncServiceB.startSync(userId: user1);
   await syncServiceC.startSync(userId: user1);
 
   final syncedRepoA = FakeFirestoreSyncedRepo(
+    path: FakeSyncEntity.collectionPath,
     syncService: syncServiceA,
-    collectionPath: FakeSyncEntity.collectionPath,
-    firestoreMapper: FakeFirestoreSyncEntityMapper(),
-    sembastMapper: FakeSembastSyncEntityMapper(),
   );
   final syncedRepoB = FakeFirestoreSyncedRepo(
+    path: FakeSyncEntity.collectionPath,
     syncService: syncServiceB,
-    collectionPath: FakeSyncEntity.collectionPath,
-    firestoreMapper: FakeFirestoreSyncEntityMapper(),
-    sembastMapper: FakeSembastSyncEntityMapper(),
   );
   final syncedRepoC = FakeFirestoreSyncedRepo(
+    path: FakeSyncEntity.collectionPath,
     syncService: syncServiceC,
-    collectionPath: FakeSyncEntity.collectionPath,
-    firestoreMapper: FakeFirestoreSyncEntityMapper(),
-    sembastMapper: FakeSembastSyncEntityMapper(),
   );
   tearDownAll(() async {
-    await syncServiceA.databaseProvider.deleteLocalDatabase();
-    await syncServiceB.databaseProvider.deleteLocalDatabase();
-    await syncServiceC.databaseProvider.deleteLocalDatabase();
+    await syncServiceA.databaseProvider.deleteDatabase();
+    await syncServiceB.databaseProvider.deleteDatabase();
+    await syncServiceC.databaseProvider.deleteDatabase();
   });
 
   test('Test create/update/delete should sync correctly', () async {
@@ -242,6 +247,7 @@ void main() async {
 Future<FirestoreSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
+  required CollectionProvider collectionProvider,
 }) async {
   return FirestoreSyncService(
     databaseProvider: FakeDatabaseProvider(),
@@ -250,13 +256,6 @@ Future<FirestoreSyncService> initSyncService({
     firestore: firestore,
     // for testing purpose, make the debounce 3 seconds, to test the debounce make sure to delay more than 3 seconds
     signingDebounce: const Duration(seconds: 3),
-    delegates: [
-      FirestoreSyncDelegate<FakeSyncEntity>(
-        collectionPath: FakeSyncEntity.collectionPath,
-        syncQuery: (collection, userId) => collection,
-        firestoreMapper: FakeFirestoreSyncEntityMapper(),
-        sembastMapper: FakeSembastSyncEntityMapper(),
-      ),
-    ],
+    collectionProvider: collectionProvider,
   );
 }

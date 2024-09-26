@@ -33,20 +33,23 @@ class FirestoreDeletionRegistryController extends GetxController with StateMixin
   void onInit() async {
     super.onInit();
     final firestore = FakeFirebaseFirestore();
+    final collectionProvider = CollectionProvider(
+      collections: [
+        FirestoreCollectionInfo(
+          path: FakeSyncEntity.collectionPath,
+          syncQuery: (collection, userId) => collection,
+        ),
+        // Example of collection that is not synced but still needs to be garbage collected
+        // CollectionInfo(path: 'unSyncedCollection'),
+      ],
+    );
     // the default sync service
     final serviceA = Get.put(
         FirestoreSyncService(
           firestore: firestore,
           // make the signing debounce shorter for testing purpose
           signingDebounce: Duration(seconds: 5),
-          delegates: [
-            FirestoreSyncDelegate<FakeSyncEntity>(
-              collectionPath: FakeSyncEntity.collectionPath,
-              syncQuery: (collection, userId) => collection,
-              firestoreMapper: FakeFirestoreSyncEntityMapper(),
-              sembastMapper: FakeSembastSyncEntityMapper(),
-            ),
-          ],
+          collectionProvider: collectionProvider,
         ),
         tag: Constants.serviceA);
 
@@ -56,39 +59,28 @@ class FirestoreDeletionRegistryController extends GetxController with StateMixin
           firestore: firestore,
           // make the signing debounce shorter for testing purpose
           signingDebounce: Duration(seconds: 5),
-          delegates: [
-            FirestoreSyncDelegate<FakeSyncEntity>(
-              collectionPath: FakeSyncEntity.collectionPath,
-              syncQuery: (collection, userId) => collection,
-              firestoreMapper: FakeFirestoreSyncEntityMapper(),
-              sembastMapper: FakeSembastSyncEntityMapper(),
-            ),
-          ],
+          collectionProvider: collectionProvider,
           deviceIdProvider: FakeDeviceIdProvider(Constants.deviceB),
         ),
         tag: Constants.serviceB);
 
     Get.put(
         FakeFirestoreSyncedRepo(
-          collectionPath: FakeSyncEntity.collectionPath,
+          path: FakeSyncEntity.collectionPath,
           syncService: serviceA,
-          firestoreMapper: FakeFirestoreSyncEntityMapper(),
-          sembastMapper: FakeSembastSyncEntityMapper(),
         ),
         tag: Constants.serviceA);
     Get.put(
         FakeFirestoreSyncedRepo(
-          collectionPath: FakeSyncEntity.collectionPath,
+          path: FakeSyncEntity.collectionPath,
           syncService: serviceB,
-          firestoreMapper: FakeFirestoreSyncEntityMapper(),
-          sembastMapper: FakeSembastSyncEntityMapper(),
         ),
         tag: Constants.serviceB);
     Get.put(
       FirestoreMockRemoteRepo(
-        collectionPath: FakeSyncEntity.collectionPath,
+        path: FakeSyncEntity.collectionPath,
         syncService: serviceA,
-        firestoreMapper: FakeFirestoreSyncEntityMapper(),
+        collectionProvider: collectionProvider,
       ),
     );
 

@@ -3,34 +3,48 @@ part of 'firestore_soft_delete.dart';
 /// Storing all dependencies in this class to easily reference them.
 class Constants {
   static const userA = 'userA';
-  static const serviceA = 'serviceA';
-  static const serviceB = 'serviceB';
+  static const deviceA = 'deviceA';
   static const deviceB = 'deviceB';
 }
 
 class FirestoreSoftDeleteController extends GetxController with StateMixin {
-  FirestoreSoftSyncService get syncServiceA => Get.find(tag: Constants.serviceA);
-  FirestoreSoftSyncService get syncServiceB => Get.find(tag: Constants.serviceB);
-  FakeFirestoreSoftSyncedRepo get syncedRepoA => Get.find(tag: Constants.serviceA);
-  FakeFirestoreSoftSyncedRepo get syncedRepoB => Get.find(tag: Constants.serviceB);
-  FakeFirestoreSoftRemoteRepo get remoteRepo => Get.find();
+  final firestore = FakeFirebaseFirestore();
 
-  /// Store all synced data here
+  final CollectionProvider collectionProvider = CollectionProvider(
+    collections: [
+      FirestoreCollectionInfo(
+        path: FakeSyncEntity.collectionPath,
+        syncQuery: (collection, userId) => collection,
+      ),
+      // Example of collection that is not synced but still needs to be garbage collected
+      // CollectionInfo(path: 'unSyncedCollection'),
+    ],
+  );
+
+  // Device A
+  late final DatabaseProvider databaseProviderA;
+  late final FirestoreSoftSyncService syncServiceA;
+  GarbageCollector get garbageCollectorA => syncServiceA.garbageCollector;
+  late final FakeFirestoreSoftSyncedRepo syncedRepoA;
   final RxList<FakeSyncEntity> syncedDataA = <FakeSyncEntity>[].obs;
-  final RxList<FakeSyncEntity> syncedDataB = <FakeSyncEntity>[].obs;
-
-  /// Store the sync state
-  Rx<SyncState> syncStateA = SyncState.stopped.obs;
-  Rx<SyncState> syncStateB = SyncState.stopped.obs;
-
-  /// Store all remote data here
-  final RxList<FakeSyncEntity> remoteData = <FakeSyncEntity>[].obs;
-
+  final Rx<SyncState> syncStateA = SyncState.stopped.obs;
   final RxList<FakeSyncEntity> trashDataA = <FakeSyncEntity>[].obs;
+
+  // Device B
+  late final DatabaseProvider databaseProviderB;
+  late final FirestoreSoftSyncService syncServiceB;
+  GarbageCollector get garbageCollectorB => syncServiceB.garbageCollector;
+  late final FakeFirestoreSoftSyncedRepo syncedRepoB;
+  final RxList<FakeSyncEntity> syncedDataB = <FakeSyncEntity>[].obs;
+  final Rx<SyncState> syncStateB = SyncState.stopped.obs;
   final RxList<FakeSyncEntity> trashDataB = <FakeSyncEntity>[].obs;
+
+  // REMOTE
+  late final FakeFirestoreSoftRemoteRepo remoteRepo;
+  final RxList<FakeSyncEntity> remoteData = <FakeSyncEntity>[].obs;
   final RxList<FakeSyncEntity> remoteTrash = <FakeSyncEntity>[].obs;
 
-  /// Store the deletion registry to review what has changed
+  // REGISTER
   Rx<DisposalRegistry> registry = DisposalRegistry(
     userId: '',
     disposalCutoff: null,
@@ -39,75 +53,74 @@ class FirestoreSoftDeleteController extends GetxController with StateMixin {
   @override
   void onInit() async {
     super.onInit();
-    final firestore = FakeFirebaseFirestore();
-    // the default sync service
-    final serviceA = Get.put(
-        FirestoreSoftSyncService(
-          // for testing, disposal age is kept at 1 minute
-          // meaning that after one minute of deletion, if disposal is invoked, trash older than 1 minute will be removed
-          disposalAge: 5.seconds,
-          firestore: firestore,
-          delegates: [
-            FirestoreSoftSyncDelegate<FakeSyncEntity>(
-              collectionPath: FakeSyncEntity.collectionPath,
-              syncQuery: (collection, userId) => collection,
-              firestoreMapper: FakeFirestoreSyncEntityMapper(),
-              sembastMapper: FakeSembastSyncEntityMapper(),
-            ),
-          ],
-        ),
-        tag: Constants.serviceA);
 
-    // create another instance of sync service to emulate multiple devices
-    final serviceB = Get.put(
-        FirestoreSoftSyncService(
-          // for testing, disposal age is kept at 1 minute
-          // meaning that after one minute of deletion, if disposal is invoked, trash older than 1 minute will be removed
-          disposalAge: 5.seconds,
-          firestore: firestore,
-          delegates: [
-            FirestoreSoftSyncDelegate<FakeSyncEntity>(
-              collectionPath: FakeSyncEntity.collectionPath,
-              syncQuery: (collection, userId) => collection,
-              firestoreMapper: FakeFirestoreSyncEntityMapper(),
-              sembastMapper: FakeSembastSyncEntityMapper(),
-            ),
-          ],
-          deviceIdProvider: FakeDeviceIdProvider(Constants.deviceB),
-        ),
-        tag: Constants.serviceB);
-
-    Get.put(
-        FakeFirestoreSoftSyncedRepo(
-          collectionPath: FakeSyncEntity.collectionPath,
-          syncService: serviceA,
-        ),
-        tag: Constants.serviceA);
-    Get.put(
-        FakeFirestoreSoftSyncedRepo(
-          collectionPath: FakeSyncEntity.collectionPath,
-          syncService: serviceB,
-        ),
-        tag: Constants.serviceB);
-    Get.put(
-      FakeFirestoreSoftRemoteRepo(
-        collectionPath: FakeSyncEntity.collectionPath,
-        syncService: serviceA,
+    // DEVICE A
+    databaseProviderA = FakeDatabaseProvider();
+    syncServiceA = FirestoreSoftSyncService(
+      firestore: firestore,
+      collectionProvider: collectionProvider,
+      deviceIdProvider: FakeDeviceIdProvider(Constants.deviceA),
+      garbageCollector: GarbageCollector(
+        firestore: firestore,
+        databaseProvider: databaseProviderA,
+        collectionProvider: collectionProvider,
+        disposalAge: 5.seconds, // for testing, disposal age is kept at 5 seconds
       ),
+      databaseProvider: databaseProviderA,
+    );
+    syncedRepoA = FakeFirestoreSoftSyncedRepo(
+      path: FakeSyncEntity.collectionPath,
+      syncService: syncServiceA,
     );
 
-    // start the sync processes
-    await serviceA.startSync(userId: Constants.userA);
-    await serviceB.startSync(userId: Constants.userA);
-    syncedDataA.bindStream(syncedRepoA.watchAll());
-    syncedDataB.bindStream(syncedRepoB.watchAll());
+    // DEVICE B
+    databaseProviderB = FakeDatabaseProvider();
+    syncServiceB = FirestoreSoftSyncService(
+      firestore: firestore,
+      collectionProvider: collectionProvider,
+      deviceIdProvider: FakeDeviceIdProvider(Constants.deviceB),
+      garbageCollector: GarbageCollector(
+        firestore: firestore,
+        databaseProvider: databaseProviderB,
+        collectionProvider: collectionProvider,
+        disposalAge: 5.seconds, // for testing, disposal age is kept at 5 seconds
+      ),
+      databaseProvider: databaseProviderB,
+    );
+    syncedRepoB = FakeFirestoreSoftSyncedRepo(
+      path: FakeSyncEntity.collectionPath,
+      syncService: syncServiceB,
+    );
+
+    // REMOTE
+    remoteRepo = FakeFirestoreSoftRemoteRepo(
+      path: FakeSyncEntity.collectionPath,
+      firestore: firestore,
+      collectionProvider: collectionProvider,
+    );
+
+    // start and want for sync processes
+    await Future.wait([
+      syncServiceA.startSync(userId: Constants.userA),
+      syncServiceB.startSync(userId: Constants.userA),
+    ]);
+
+    // remote watch
     remoteData.bindStream(remoteRepo.watchAll());
-    syncStateA.bindStream(syncServiceA.watchSyncState());
-    syncStateB.bindStream(syncServiceB.watchSyncState());
-    registry.bindStream(syncServiceA.watchRegistry());
-    trashDataA.bindStream(syncedRepoA.watchTrash());
-    trashDataB.bindStream(syncedRepoB.watchTrash());
     remoteTrash.bindStream(remoteRepo.watchTrash());
+
+    // A watch
+    syncStateA.bindStream(syncServiceA.watchSyncState());
+    syncedDataA.bindStream(syncedRepoA.watchAll());
+    trashDataA.bindStream(syncedRepoA.watchTrash());
+
+    // B watch
+    syncStateB.bindStream(syncServiceB.watchSyncState());
+    syncedDataB.bindStream(syncedRepoB.watchAll());
+    trashDataB.bindStream(syncedRepoB.watchTrash());
+
+    // registry watch
+    registry.bindStream(garbageCollectorA.watchRegistry());
     change(true, status: RxStatus.success());
   }
 

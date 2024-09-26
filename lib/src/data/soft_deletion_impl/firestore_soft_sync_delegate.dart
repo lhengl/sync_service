@@ -5,61 +5,27 @@ part of 'soft_deletion_impl.dart';
 /// following a standard approach to soft delete amd read only from cache
 /// Firestore has a TTL deletion that is perfect for this use case:
 /// https://firebase.google.com/docs/firestore/ttl
-class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> with FirestoreHelper, Loggable {
-  /// A callback to retrieve the sync query for this delegate/collection
-  final SyncQuery<T> syncQuery;
-
-  final String collectionPath;
-
-  final String idField;
-
-  /// The field name that stores updated timestamp. Defaults to "updatedAt".
-  /// Override if this is different in the collection.
-  final String updatedAtField;
-
+class FirestoreSoftSyncDelegate extends SyncDelegate with FirestoreHelper, Loggable {
   FirestoreSoftSyncDelegate({
-    this.updatedAtField = 'updatedAt',
-    this.idField = 'id',
-    required this.collectionPath,
-    required this.syncQuery,
-    required this.firestoreMapper,
-    required this.sembastMapper,
+    required super.collectionInfo,
   });
 
-  String get debugDetails => '[UID:$userId][DEVICE:$deviceId][COLLECTION:$collectionPath]';
+  /// A callback to retrieve the sync query for this delegate/collection
+  FirestoreSyncQuery get syncQuery => collectionInfo.syncQuery;
 
   // service
   @override
   FirestoreSoftSyncService get syncService => super.syncService as FirestoreSoftSyncService;
   fs.FirebaseFirestore get firestore => syncService.firestore;
-  sb.Database get db => syncService.sembastDb;
+  sb.Database get db => syncService.db;
 
-  // firestore
-  final JsonMapper<T> firestoreMapper;
-  late final fs.CollectionReference<Map<String, dynamic>> collection = firestore.collection(collectionPath);
-  late final fs.CollectionReference<T> typedCollection = collection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
-  );
-  // sembast
-  final JsonMapper<T> sembastMapper;
-  late final sb.StoreRef<String, Map<String, dynamic>> store = sb.StoreRef(collectionPath);
-  late final sb.StoreRef<String, Map<String, dynamic>> trashStore = sb.StoreRef(trashCollectionPath);
+  // collection
+  late final fs.CollectionReference<JsonObject> collection = firestore.collection(path);
+  late final sb.StoreRef<String, JsonObject> store = sb.StoreRef(path);
 
-  String get trashCollectionPath => '${collectionPath}_trash';
-  late final fs.CollectionReference trashCollection = firestore.collection(trashCollectionPath);
-  late final fs.CollectionReference<T> trashTypedCollection = trashCollection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
-  );
+  // trash
+  late final sb.StoreRef<String, JsonObject> trashStore = sb.StoreRef(trashPath);
+  late final fs.CollectionReference<JsonObject> trashCollection = firestore.collection(trashPath);
 
   Completer<bool> _sessionCompleter = Completer();
   @override
@@ -78,7 +44,7 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
 
     devLog('$debugDetails startSync: initialising cache');
 
-    final lastUpdatedAt = (await getLatestRecordFromCache())?.updatedAt;
+    final lastUpdatedAt = (await getLatestRecordFromCache())?[updateField];
 
     devLog('$debugDetails startSync: setting up sync listener');
     final stream = _watchRemoteChanges(
@@ -101,25 +67,23 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
 
   /// Returns the last record in the cache.
   /// This will be used as the seed to fetch new data from remote to cache
-  Future<T?> getLatestRecordFromCache() async {
+  Future<JsonObject?> getLatestRecordFromCache() async {
     final record = await store.find(db,
         finder: sb.Finder(
-          sortOrders: [sb.SortOrder(updatedAtField, false)],
+          sortOrders: [sb.SortOrder(updateField, false)],
           limit: 1,
         ));
-    final value = sembastMapper.fromMapOrNull(record.firstOrNull?.value);
-    return value;
+    return record.firstOrNull?.value;
   }
 
   /// Returns the last trash in the cache.
-  Future<T?> getLatestTrashFromCache() async {
+  Future<JsonObject?> getLatestTrashFromCache() async {
     final record = await trashStore.find(db,
         finder: sb.Finder(
-          sortOrders: [sb.SortOrder(updatedAtField, false)],
+          sortOrders: [sb.SortOrder(updateField, false)],
           limit: 1,
         ));
-    final value = sembastMapper.fromMapOrNull(record.firstOrNull?.value);
-    return value;
+    return record.firstOrNull?.value;
   }
 
   @override
@@ -129,21 +93,21 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
 
   /// When the sync starts (when [startSync] is called), this method will be called to create a stream to retrieve
   /// data changes from remote. The stream is closed when [stopSync] is called.
-  Stream<fs.QuerySnapshot<T>> _watchRemoteChanges({
+  Stream<fs.QuerySnapshot<JsonObject>> _watchRemoteChanges({
     required DateTime? lastUpdatedAt,
     required String userId,
   }) {
-    var query = syncQuery(typedCollection, userId);
+    var query = syncQuery(collection, userId);
     if (lastUpdatedAt != null) {
       devLog('$debugDetails watchChanges: watching documents where "updatedAt" > $lastUpdatedAt');
-      query = query.where(updatedAtField, isGreaterThan: lastUpdatedAt.toIso8601String());
+      query = query.where(updateField, isGreaterThan: lastUpdatedAt.toIso8601String());
     } else {
       devLog('$debugDetails watchChanges: watching all user documents in collection');
     }
     return query.snapshots();
   }
 
-  Future<void> _handleRemoteChanges(fs.QuerySnapshot<T> snapshot) async {
+  Future<void> _handleRemoteChanges(fs.QuerySnapshot<JsonObject> snapshot) async {
     if (snapshot.docChanges.isEmpty) {
       devLog('$debugDetails _handleRemoteChanges: no changes detected');
     } else {
@@ -152,10 +116,10 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
         return;
       }
       final changes = snapshot.docChanges.groupListsBy((e) => e.type);
-      final added = changes[fs.DocumentChangeType.added]?.map((e) => e.doc.data()).whereNotNull().toList() ?? [];
-      final modified = changes[fs.DocumentChangeType.modified]?.map((e) => e.doc.data()).whereNotNull().toList() ?? [];
+      final added = changes[fs.DocumentChangeType.added]?.map((e) => e.doc) ?? [];
+      final modified = changes[fs.DocumentChangeType.modified]?.map((e) => e.doc) ?? [];
       final updated = [...added, ...modified];
-      final removed = changes[fs.DocumentChangeType.removed]?.map((e) => e.doc.data()).whereNotNull().toList() ?? [];
+      final removed = changes[fs.DocumentChangeType.removed]?.map((e) => e.doc) ?? [];
       if (updated.isNotEmpty) {
         final putIds = updated.map((e) => e.id);
         putCache(updated).then((_) {
@@ -177,16 +141,16 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
     }
   }
 
-  Future<void> putCache(List<T> values) async {
+  Future<void> putCache(List<fs.DocumentSnapshot<JsonObject>> values) async {
     final ids = values.map((e) => e.id);
-    final sembastValues = values.map((e) => sembastMapper.toMap(e)).toList();
+    final sembastValues = values.map((e) => e.data()!).toList();
     await store.records(ids).put(db, sembastValues);
   }
 
   /// Move cached records to trash
-  Future<void> moveToTrash(List<T> values) async {
+  Future<void> moveToTrash(Iterable<fs.DocumentSnapshot<JsonObject>> values) async {
     final ids = values.map((e) => e.id);
-    final sembastValues = values.map((e) => sembastMapper.toMap(e)).toList();
+    final sembastValues = values.map((e) => e.data()!).toList();
     await store.records(ids).delete(db);
     await trashStore.records(ids).put(db, sembastValues);
   }
@@ -194,37 +158,35 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
   /// Dispose trash by removing anything that is older than cut off date
   Future<void> disposeTrash({required DateTime cutoff}) async {
     devLog('$debugDetails disposeTrash: disposing trash older than $cutoff');
-
     final cachedTrash = (await trashStore.find(
       db,
       finder: sb.Finder(
-        filter: sb.Filter.lessThan(updatedAtField, cutoff.toIso8601String()),
+        filter: sb.Filter.lessThan(updateField, cutoff.toIso8601String()),
       ),
-    ))
-        .map((e) => sembastMapper.fromMap(e.value));
-    final cachedTrashIds = cachedTrash.map((e) => e.id);
+    ));
+    final cachedTrashIds = cachedTrash.map((e) => e.key);
     await trashStore.records(cachedTrashIds).delete(db);
     devLog('$debugDetails disposeTrash: ${cachedTrash.length} trash disposed from cache: $cachedTrashIds');
 
-    final remoteTrash = await trashTypedCollection
+    final remoteTrash = await trashCollection
         .where(
-          updatedAtField,
+          updateField,
           isLessThan: cutoff.toIso8601String(),
         )
         .get();
-    final remoteTrashIds = remoteTrash.data.map((e) => e.id);
+    final remoteTrashIds = remoteTrash.docs.map((e) => e.id);
     final batch = firestore.batch();
     for (var id in remoteTrashIds) {
-      batch.delete(trashTypedCollection.doc(id));
+      batch.delete(trashCollection.doc(id));
     }
     await batch.commit();
     devLog('$debugDetails disposeTrash: ${remoteTrashIds.length} trash disposed on remote: $remoteTrashIds');
   }
 
-  Future<List<T>> fetchTrashFromRemoteBefore(DateTime before) async {
-    final remoteTrash = await trashTypedCollection
+  Future<List<JsonObject>> fetchTrashFromRemoteBefore(DateTime before) async {
+    final remoteTrash = await trashCollection
         .where(
-          updatedAtField,
+          updateField,
           isLessThan: before.toIso8601String(),
         )
         .get();
@@ -238,51 +200,53 @@ class FirestoreSoftSyncDelegate<T extends SyncEntity> extends SyncDelegate<T> wi
   Future<void> updateCache() async {
     // get latest from cache
     final latestCachedRecord = await getLatestRecordFromCache();
-    final lastUpdatedAt = latestCachedRecord?.updatedAt;
+    final lastUpdatedAt = latestCachedRecord?[updateField];
 
     // get latest trash from cache.
     final latestCachedTrash = await getLatestTrashFromCache();
-    final lastTrashAt = latestCachedTrash?.updatedAt;
+    final lastTrashAt = latestCachedTrash?[updateField];
 
     // update records
     (collection
             .where(
-              updatedAtField,
-              isGreaterThan: lastUpdatedAt?.toIso8601String(),
+              updateField,
+              isGreaterThan: lastUpdatedAt,
             )
             .get())
         .then(
-      (doc) {
+      (snapshot) {
         // ensure data is from remote
-        if (doc.metadata.isFromCache) {
+        if (snapshot.metadata.isFromCache) {
           return;
         }
-        final remoteRecords = doc.data;
-        final ids = remoteRecords.map((e) => e[idField] as String);
-        store.records(ids).put(db, remoteRecords);
+        final docs = snapshot.docs;
+        final ids = docs.map((e) => e.id);
+        final data = docs.map((e) => e.data()).toList();
+        store.records(ids).put(db, data);
       },
     );
 
     // update trash
-    (trashTypedCollection
+    (trashCollection
             .where(
-              updatedAtField,
-              isGreaterThan: lastTrashAt?.toIso8601String(),
+              updateField,
+              isGreaterThan: lastTrashAt,
             )
             .get())
         .then(
-      (doc) {
+      (snapshot) {
         // ensure data is from remote
-        if (doc.metadata.isFromCache) {
+        if (snapshot.metadata.isFromCache) {
           return;
         }
-        final remoteRecords = doc.data;
-        final sembastValues = remoteRecords.map((e) => sembastMapper.toMap(e)).toList();
-        final ids = remoteRecords.map((e) => e.id);
+        final docs = snapshot.docs;
+        final ids = docs.map((e) => e.id);
+        final data = docs.map((e) => e.data()).toList();
+
         // move to trash
         db.transaction((transaction) async {
           await store.records(ids).delete(transaction);
-          await trashStore.records(ids).put(transaction, sembastValues);
+          await trashStore.records(ids).put(transaction, data);
         });
       },
     );

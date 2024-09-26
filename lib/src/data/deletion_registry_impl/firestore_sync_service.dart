@@ -30,11 +30,11 @@ class FirestoreSyncService extends SyncService with Loggable {
   final DatabaseProvider databaseProvider;
 
   FirestoreSyncService({
-    required List<FirestoreSyncDelegate> delegates,
     super.deviceIdProvider,
     super.timestampProvider,
+    required super.collectionProvider,
     required this.firestore,
-    this.deletionRegistryPath = 'deletionRegistry',
+    this.registryPath = 'deletionRegistry',
     DatabaseProvider? databaseProvider,
     Duration? offlineDeviceTtl,
     int? retriesOnFailure = 3,
@@ -45,33 +45,36 @@ class FirestoreSyncService extends SyncService with Loggable {
         retryInterval = retryInterval ?? const Duration(seconds: 3),
         signingDebounce = signingDebounce ?? const Duration(minutes: 1),
         databaseProvider = databaseProvider ?? DatabaseProvider(),
-        super(delegates: delegates);
+        super(
+            delegates: collectionProvider.collections
+                .map(
+                  (collectionInfo) => FirestoreSyncDelegate(collectionInfo: collectionInfo),
+                )
+                .toList());
 
   // firestore
   final fs.FirebaseFirestore firestore;
-  sb.Database get sembastDb => databaseProvider.sembastDb;
+  sb.Database get db => databaseProvider.db;
 
   @override
   List<FirestoreSyncDelegate> get delegates => super.delegates as List<FirestoreSyncDelegate>;
 
-  // delete registry
-  final String deletionRegistryPath;
-  final FirestoreDeletionRegistryMapper _deletionRegistryMapper = FirestoreDeletionRegistryMapper();
-  late final fs.CollectionReference deletionCollection = firestore.collection(deletionRegistryPath);
-  late final fs.CollectionReference<DeletionRegistry> deletionTypedCollection = deletionCollection.withConverter(
+  final String registryPath;
+  final FirestoreDeletionRegistryMapper _registryMapper = FirestoreDeletionRegistryMapper();
+  late final fs.CollectionReference registryCollection = firestore.collection(registryPath);
+  late final fs.CollectionReference<DeletionRegistry> registryTypedCollection = registryCollection.withConverter(
     fromFirestore: (value, __) {
-      return _deletionRegistryMapper.fromMap(value.data()!);
+      return _registryMapper.fromMap(value.data()!);
     },
     toFirestore: (value, __) {
-      return _deletionRegistryMapper.toMap(value);
+      return _registryMapper.toMap(value);
     },
   );
-
   @override
   Future<void> beforeStarting() async {
     devLog('$debugDetails beforeStarting: waiting for local database to be ready...');
-    await databaseProvider.closeLocalDatabase(); // close the previous database
-    await databaseProvider.getOrOpenLocalDatabase(userId: userId, deviceId: deviceId);
+    await databaseProvider.closeDatabase(); // close the previous database
+    await databaseProvider.openDatabase(userId: userId);
 
     devLog('$debugDetails beforeStarting: cleaning and validating registry...');
     await cleanAndValidateCache();
@@ -80,7 +83,7 @@ class FirestoreSyncService extends SyncService with Loggable {
   @override
   Future<void> dispose() async {
     await super.dispose();
-    await databaseProvider.closeLocalDatabase();
+    await databaseProvider.closeDatabase();
   }
 
   Future<void> cleanAndValidateCache() async {
@@ -102,9 +105,9 @@ class FirestoreSyncService extends SyncService with Loggable {
         retryInterval: retryInterval,
         future: () async {
           for (var delegate in delegates) {
-            devLog('$debugDetails cleanAndValidate: Clearing cache for "${delegate.collectionPath}"...');
+            devLog('$debugDetails cleanAndValidate: Clearing cache for "${delegate.path}"...');
             await delegate.clearCache();
-            devLog('$debugDetails cleanAndValidate: Cached cleared for "${delegate.collectionPath}".');
+            devLog('$debugDetails cleanAndValidate: Cached cleared for "${delegate.path}".');
           }
         },
       ).retry();
@@ -130,9 +133,9 @@ class FirestoreSyncService extends SyncService with Loggable {
     // cancel the next call to signing, because we are already signing during the cleaning.
     _resetSigningDebounce();
 
-    final registry = await sembastDb.transaction((sembastTransaction) async {
+    final registry = await db.transaction((sembastTransaction) async {
       final registry = await firestore.runTransaction((firestoreTransaction) async {
-        final docRef = deletionTypedCollection.doc(userId);
+        final docRef = registryTypedCollection.doc(userId);
         final registry = (await firestoreTransaction.get(docRef)).data() ?? DeletionRegistry(userId: userId);
 
         devLog('$debugDetails cleanRegistry: signing deletions on registry');
@@ -214,7 +217,7 @@ class FirestoreSyncService extends SyncService with Loggable {
 
         devLog('$debugDetails signDeletions: $_singingQueue');
 
-        await sembastDb.transaction((sembastTransaction) async {
+        await db.transaction((sembastTransaction) async {
           final Map<String, dynamic> registryUpdate = {};
 
           for (var collection in _singingQueue.entries) {
@@ -235,7 +238,7 @@ class FirestoreSyncService extends SyncService with Loggable {
             }
           }
 
-          await deletionTypedCollection.doc(userId).update(registryUpdate);
+          await registryTypedCollection.doc(userId).update(registryUpdate);
 
           // clear queue after signing
           _singingQueue.clear();
@@ -251,18 +254,18 @@ class FirestoreSyncService extends SyncService with Loggable {
 
   /// Returns the deletion registry for the user, if empty set it first before returning it.
   Future<DeletionRegistry> getOrSetRegistry() async {
-    devLog('$debugDetails getOrSetRegistry: userId=$userId');
-    final doc = deletionTypedCollection.doc(userId);
+    devLog('getOrSetRegistry: userId=$userId');
+    final doc = registryTypedCollection.doc(userId);
     DeletionRegistry? registry = (await doc.get()).data();
     if (registry == null) {
       registry = DeletionRegistry(userId: userId);
       await doc.set(registry);
     }
-    devLog('$debugDetails getRegistry: registry=$registry');
+    devLog('getRegistry: registry=$registry');
     return registry;
   }
 
   Stream<DeletionRegistry> watchRegistry() {
-    return deletionTypedCollection.doc(userId).snapshots().map((e) => e.data() ?? DeletionRegistry(userId: userId));
+    return registryTypedCollection.doc(userId).snapshots().map((e) => e.data() ?? DeletionRegistry(userId: userId));
   }
 }

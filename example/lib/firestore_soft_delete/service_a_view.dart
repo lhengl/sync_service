@@ -1,9 +1,9 @@
 part of 'firestore_soft_delete.dart';
 
 class SoftServiceAView extends GetView<FirestoreSoftDeleteController> {
-  FirestoreSoftSyncService get syncServiceA => Get.find(tag: Constants.serviceA);
-
-  FakeFirestoreSoftSyncedRepo get syncedRepo => Get.find(tag: Constants.serviceA);
+  FirestoreSoftSyncService get syncServiceA => controller.syncServiceA;
+  FakeFirestoreSoftSyncedRepo get syncedRepoA => controller.syncedRepoA;
+  GarbageCollector get garbageCollectorA => controller.garbageCollectorA;
 
   const SoftServiceAView({super.key});
 
@@ -14,13 +14,13 @@ class SoftServiceAView extends GetView<FirestoreSoftDeleteController> {
         children: [
           OutlinedButton(
             onPressed: () {
-              syncedRepo.create(controller.generateRandomData());
+              syncedRepoA.create(controller.generateRandomData());
             },
             child: const Text('Create a data via synced repo'),
           ),
           OutlinedButton(
             onPressed: () async {
-              await syncedRepo.deleteAll();
+              await syncedRepoA.deleteAll();
             },
             child: const Text('Delete all data in cache'),
           ),
@@ -43,7 +43,7 @@ class SoftServiceAView extends GetView<FirestoreSoftDeleteController> {
                 ),
           OutlinedButton(
             onPressed: () async {
-              await syncServiceA.disposeOldTrash();
+              await garbageCollectorA.disposeOldTrash();
             },
             child: const Text('Dispose old trash'),
           ),

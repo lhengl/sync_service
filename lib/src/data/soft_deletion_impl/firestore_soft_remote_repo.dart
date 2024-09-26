@@ -18,14 +18,17 @@ part of 'soft_deletion_impl.dart';
 /// - Will move the record to a trash collection to ensure deletion have a grace period for syncing
 /// - Always delete items using one of these methods to ensure deletions are synced across multiple devices.
 abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
-  // service
-  @override
-  FirestoreSoftSyncService get syncService => super.syncService as FirestoreSoftSyncService;
-  fs.FirebaseFirestore get firestore => syncService.firestore;
+  FirestoreSoftRemoteRepo({
+    required super.path,
+    required super.collectionProvider,
+    required this.firestore,
+    required this.firestoreMapper,
+  });
 
-  // entity collection
+  // firestore
+  final fs.FirebaseFirestore firestore;
   final JsonMapper<T> firestoreMapper;
-  late final fs.CollectionReference collection = firestore.collection(collectionPath);
+  late final fs.CollectionReference collection = firestore.collection(path);
   late final fs.CollectionReference<T> typedCollection = collection.withConverter(
     fromFirestore: (value, __) {
       return firestoreMapper.fromMap(value.data()!);
@@ -34,10 +37,7 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
       return firestoreMapper.toMap(value);
     },
   );
-
-  // firestore deleted
-  String get trashCollectionPath => '${collectionPath}_trash';
-  late final fs.CollectionReference trashCollection = firestore.collection(trashCollectionPath);
+  late final fs.CollectionReference trashCollection = firestore.collection(trashPath);
   late final fs.CollectionReference<T> trashTypedCollection = trashCollection.withConverter(
     fromFirestore: (value, __) {
       return firestoreMapper.fromMap(value.data()!);
@@ -46,12 +46,6 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
       return firestoreMapper.toMap(value);
     },
   );
-
-  FirestoreSoftRemoteRepo({
-    required super.syncService,
-    required super.collectionPath,
-    required this.firestoreMapper,
-  });
 
   //////////// CRUD OPTIONS
 

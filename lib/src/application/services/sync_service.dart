@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 
+import '../../data/models/collection_info.dart';
 import '../../helpers/loggable.dart';
 import 'device_id_provider.dart';
 import 'sync_delegate.dart';
@@ -36,8 +37,11 @@ abstract class SyncService with Loggable {
 
   final TimestampProvider timestampProvider;
 
+  final CollectionProvider collectionProvider;
+
   SyncService({
     required this.delegates,
+    required this.collectionProvider,
     this.deviceIdProvider = const DeviceInfoDeviceIdProvider(),
     this.timestampProvider = const KronosTimestampProvider(),
   }) {

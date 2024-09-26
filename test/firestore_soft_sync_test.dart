@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sync_service/src/application/application.dart';
 import 'package:sync_service/src/data/data.dart';
+import 'package:sync_service/src/helpers/helpers.dart';
 
 // https://firebase.flutter.dev/docs/testing/testing/
 // https://pub.dev/packages/fake_cloud_firestore
@@ -14,19 +15,32 @@ void main() async {
   const deviceA = 'deviceA';
   const deviceB = 'deviceB';
   const deviceC = 'deviceC';
+  Loggable.testMode = true;
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
+  final collectionProvider = CollectionProvider(
+    collections: [
+      FirestoreCollectionInfo(
+        path: FakeSyncEntity.collectionPath,
+        syncQuery: (collection, userId) => collection,
+      ),
+    ],
+  );
+
   final syncServiceA = await initSyncService(
     deviceId: deviceA,
     firestore: firestore,
+    collectionProvider: collectionProvider,
   );
   final syncServiceB = await initSyncService(
     deviceId: deviceB,
     firestore: firestore,
+    collectionProvider: collectionProvider,
   );
   final syncServiceC = await initSyncService(
     deviceId: deviceC,
     firestore: firestore,
+    collectionProvider: collectionProvider,
   );
   await syncServiceA.startSync(userId: user1);
   await syncServiceB.startSync(userId: user1);
@@ -34,20 +48,20 @@ void main() async {
 
   final syncedRepoA = FakeFirestoreSoftSyncedRepo(
     syncService: syncServiceA,
-    collectionPath: FakeSyncEntity.collectionPath,
+    path: FakeSyncEntity.collectionPath,
   );
   final syncedRepoB = FakeFirestoreSoftSyncedRepo(
     syncService: syncServiceB,
-    collectionPath: FakeSyncEntity.collectionPath,
+    path: FakeSyncEntity.collectionPath,
   );
   final syncedRepoC = FakeFirestoreSoftSyncedRepo(
     syncService: syncServiceC,
-    collectionPath: FakeSyncEntity.collectionPath,
+    path: FakeSyncEntity.collectionPath,
   );
   tearDownAll(() async {
-    await syncServiceA.databaseProvider.deleteLocalDatabase();
-    await syncServiceB.databaseProvider.deleteLocalDatabase();
-    await syncServiceC.databaseProvider.deleteLocalDatabase();
+    await syncServiceA.databaseProvider.deleteDatabase();
+    await syncServiceB.databaseProvider.deleteDatabase();
+    await syncServiceC.databaseProvider.deleteDatabase();
   });
 
   test('Test create/update/delete should sync correctly', () async {
@@ -169,20 +183,21 @@ void main() async {
 Future<FirestoreSoftSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
+  required CollectionProvider collectionProvider,
 }) async {
+  final databaseProvider = FakeDatabaseProvider();
   return FirestoreSoftSyncService(
-    databaseProvider: FakeDatabaseProvider(),
+    databaseProvider: databaseProvider,
     timestampProvider: const FakeTimeStampProvider(),
     deviceIdProvider: FakeDeviceIdProvider(deviceId),
     firestore: firestore,
-    // for testing purpose, make the debounce 3 seconds, to test the debounce make sure to delay more than 3 seconds
-    delegates: [
-      FirestoreSoftSyncDelegate<FakeSyncEntity>(
-        collectionPath: FakeSyncEntity.collectionPath,
-        syncQuery: (collection, userId) => collection,
-        firestoreMapper: FakeFirestoreSyncEntityMapper(),
-        sembastMapper: FakeSembastSyncEntityMapper(),
-      ),
-    ],
+    collectionProvider: collectionProvider,
+    garbageCollector: GarbageCollector(
+      disposalAge: const Duration(seconds: 5), // for testing, disposal age is kept at 5 seconds
+      collectionProvider: collectionProvider,
+      firestore: firestore,
+      databaseProvider: databaseProvider,
+      timestampProvider: const FakeTimeStampProvider(),
+    ),
   );
 }

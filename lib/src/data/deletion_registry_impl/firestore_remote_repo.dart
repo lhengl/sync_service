@@ -20,14 +20,20 @@ part of 'deletion_registry_impl.dart';
 /// - It is important to always sign the deletion to avoid stale/deleted data living forever rent free in cache
 /// - Always sign deletion in a batch operation by calling [signDeletions] to ensure atomicity
 abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
-  // service
-  @override
-  FirestoreSyncService get syncService => super.syncService as FirestoreSyncService;
-  fs.FirebaseFirestore get firestore => syncService.firestore;
+  FirestoreRemoteRepo({
+    required super.path,
+    required super.collectionProvider,
+    super.timestampProvider,
+    required this.firestoreMapper,
+    required this.syncService,
+  });
 
-  // entity collection
+  final FirestoreSyncService syncService;
+
+  // firestore
+  fs.FirebaseFirestore get firestore => syncService.firestore;
   final JsonMapper<T> firestoreMapper;
-  late final fs.CollectionReference collection = firestore.collection(collectionPath);
+  late final fs.CollectionReference collection = firestore.collection(path);
   late final fs.CollectionReference<T> typedCollection = collection.withConverter(
     fromFirestore: (value, __) {
       return firestoreMapper.fromMap(value.data()!);
@@ -36,12 +42,6 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> w
       return firestoreMapper.toMap(value);
     },
   );
-
-  FirestoreRemoteRepo({
-    required super.syncService,
-    required super.collectionPath,
-    required this.firestoreMapper,
-  });
 
   //////////// CRUD OPTIONS
 
@@ -275,8 +275,8 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> w
     // When a remote repository is deleting, there is no deviceId attached.
     // But it still needs to be signed in order to let synced devices know to delete from cache.
     // For this reason, a remote repository will need to store this in a spoof device id called 'remote'
-    batch.update(syncService.deletionTypedCollection.doc(syncService.userId), {
-      'deletions.remote.$collectionPath': fs.FieldValue.arrayUnion(ids.toList()),
+    batch.update(syncService.registryTypedCollection.doc(syncService.userId), {
+      'deletions.remote.$path': fs.FieldValue.arrayUnion(ids.toList()),
     });
   }
 }

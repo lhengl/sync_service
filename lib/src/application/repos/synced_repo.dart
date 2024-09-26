@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter_kronos/flutter_kronos.dart';
+import 'package:sync_service/src/data/models/collection_info.dart';
 
 import '../../domain/entities/sync_entity.dart';
 import '../../helpers/helpers.dart';
@@ -9,18 +9,26 @@ import '../services/sync_service.dart';
 /// A synced repo assumes that the local database is synced by the SyncService so read from cache operation will
 /// result in the return of synced data. Additional method implementation should follow this assumption.
 abstract class SyncedRepo<T extends SyncEntity> with Loggable {
-  final String collectionPath;
-
-  final SyncService syncService;
-
   SyncedRepo({
-    required this.collectionPath,
+    required String path,
     required this.syncService,
-  });
+  }) : _path = path;
 
   String get debugDetails => '[DeviceId:${syncService.deviceId}]';
 
-  Future<DateTime> get currentTime async => (await FlutterKronos.getNtpDateTime ?? DateTime.now()).toUtc();
+  // sync service
+  final SyncService syncService;
+  Future<DateTime> get currentTime async => syncService.currentTime;
+  CollectionProvider get collectionProvider => syncService.collectionProvider;
+
+  // collection provider
+  final String _path;
+  FirestoreCollectionInfo get collectionInfo => collectionProvider.get(_path)!;
+  String get path => _path;
+  String get trashPath => collectionInfo.trashPath;
+  String get idField => collectionInfo.idField;
+  String get updateField => collectionInfo.updateField;
+  String get createField => collectionInfo.createField;
 
   // CRUD OPTIONS
 

@@ -1,7 +1,7 @@
 part of 'firestore_soft_delete.dart';
 
 class SoftRemoteView extends GetView<FirestoreSoftDeleteController> {
-  FakeFirestoreSoftRemoteRepo get remoteRepo => Get.find();
+  FakeFirestoreSoftRemoteRepo get remoteRepo => controller.remoteRepo;
 
   const SoftRemoteView({super.key});
 

@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:flutter/material.dart';
+
 mixin Loggable {
+  static bool testMode = false;
+
   void devLog(
     String message, {
     DateTime? time,
@@ -34,15 +38,19 @@ mixin Loggable {
     StackTrace? stackTrace,
     Type? type,
   }) {
-    developer.log(
-      message,
-      time: time,
-      sequenceNumber: sequenceNumber,
-      level: level,
-      name: type?.toString() ?? name,
-      zone: zone,
-      error: error,
-      stackTrace: stackTrace,
-    );
+    if (testMode) {
+      debugPrint(message);
+    } else {
+      developer.log(
+        message,
+        time: time,
+        sequenceNumber: sequenceNumber,
+        level: level,
+        name: type?.toString() ?? name,
+        zone: zone,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }

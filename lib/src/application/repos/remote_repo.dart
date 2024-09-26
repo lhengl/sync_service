@@ -1,10 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter_kronos/flutter_kronos.dart';
-
+import '../../data/models/collection_info.dart';
 import '../../domain/entities/sync_entity.dart';
 import '../../helpers/helpers.dart';
-import '../services/sync_service.dart';
+import '../services/timestamp_provider.dart';
 
 /// A remote repository will interface directly with the remote database and will ignore the cache.
 /// Write operations will not write to cache.
@@ -13,16 +12,25 @@ import '../services/sync_service.dart';
 /// in the remote repo for debugging purpose to imitate a delete from a remote source such as a web service.
 /// You must always sign a deletion even when deleting from a remote source.
 abstract class RemoteRepo<T extends SyncEntity> with Loggable {
-  final String collectionPath;
-
-  final SyncService syncService;
-
   RemoteRepo({
-    required this.collectionPath,
-    required this.syncService,
-  });
+    required String path,
+    required this.collectionProvider,
+    this.timestampProvider = const KronosTimestampProvider(),
+  }) : _path = path;
 
-  Future<DateTime> get currentTime async => await FlutterKronos.getNtpDateTime ?? DateTime.now();
+  // collection provider
+  final String _path;
+  final CollectionProvider collectionProvider;
+  FirestoreCollectionInfo get collectionInfo => collectionProvider.get(_path)!;
+  String get path => _path;
+  String get trashPath => collectionInfo.trashPath;
+  String get idField => collectionInfo.idField;
+  String get updateField => collectionInfo.updateField;
+  String get createField => collectionInfo.createField;
+
+  // timestamp provider
+  final TimestampProvider timestampProvider;
+  Future<DateTime> get currentTime async => (await timestampProvider.currentTime).toUtc();
 
   // CRUD OPTIONS
 

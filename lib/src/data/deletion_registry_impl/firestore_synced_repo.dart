@@ -20,15 +20,22 @@ part of 'deletion_registry_impl.dart';
 /// - It is important to always sign the deletion to avoid stale/deleted data living forever rent free in cache
 /// - Always sign deletion in a batch operation by calling [signDeletions] to ensure atomicity
 abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> with Loggable {
+  FirestoreSyncedRepo({
+    required super.path,
+    required super.syncService,
+    required this.firestoreMapper,
+    required this.sembastMapper,
+  });
+
   // service
   @override
   FirestoreSyncService get syncService => super.syncService as FirestoreSyncService;
   fs.FirebaseFirestore get firestore => syncService.firestore;
-  sb.Database get sembastDb => syncService.sembastDb;
+  sb.Database get db => syncService.db;
 
   // firestore
   final JsonMapper<T> firestoreMapper;
-  late final fs.CollectionReference collection = firestore.collection(collectionPath);
+  late final fs.CollectionReference collection = firestore.collection(path);
   late final fs.CollectionReference<T> typedCollection = collection.withConverter(
     fromFirestore: (value, __) {
       return firestoreMapper.fromMap(value.data()!);
@@ -40,21 +47,14 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
 
   // sembast
   final JsonMapper<T> sembastMapper;
-  late final sb.StoreRef<String, Map<String, dynamic>> sembastStore = sb.StoreRef(collectionPath);
-
-  FirestoreSyncedRepo({
-    required super.collectionPath,
-    required super.syncService,
-    required this.firestoreMapper,
-    required this.sembastMapper,
-  });
+  late final sb.StoreRef<String, Map<String, dynamic>> sembastStore = sb.StoreRef(path);
 
   //////////// CRUD OPTIONS
 
   @override
   Future<T?> get(String id) async {
     devLog('$debugDetails get: id=$id');
-    final record = await sembastStore.record(id).get(sembastDb);
+    final record = await sembastStore.record(id).get(db);
     return sembastMapper.fromMapOrNull(record);
   }
 
@@ -70,7 +70,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     value.createdAt = value.updatedAt = await currentTime;
 
     // transaction
-    await sembastDb.transaction((transaction) async {
+    await db.transaction((transaction) async {
       await sembastStore.record(value.id).put(transaction, sembastMapper.toMap(value));
       await typedCollection.doc(value.id).set(value);
     });
@@ -86,7 +86,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     value.updatedAt = await currentTime;
 
     // transaction
-    await sembastDb.transaction((transaction) async {
+    await db.transaction((transaction) async {
       await sembastStore.record(value.id).put(transaction, sembastMapper.toMap(value));
       await typedCollection.doc(value.id).set(value, fs.SetOptions(merge: true));
     });
@@ -104,7 +104,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     devLog('$debugDetails delete: id=${value.id}');
 
     // transaction
-    await sembastDb.transaction((transaction) async {
+    await db.transaction((transaction) async {
       await sembastStore.record(value.id).delete(transaction);
       final batch = firestore.batch();
       batch.delete(typedCollection.doc(value.id));
@@ -134,7 +134,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     if (ids.isEmpty) {
       return [];
     }
-    final records = await sembastStore.records(ids).get(sembastDb);
+    final records = await sembastStore.records(ids).get(db);
     final objects = records.whereNotNull().map((e) => sembastMapper.fromMap(e));
     return objects.toList();
   }
@@ -161,7 +161,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     }
 
     // transaction
-    await sembastDb.transaction((transaction) async {
+    await db.transaction((transaction) async {
       await sembastStore.records(ids).add(transaction, sembastValues);
       await batch.commit();
     });
@@ -189,7 +189,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     final sembastValues = clones.map((e) => sembastMapper.toMap(e)).toList();
 
     // transaction
-    await sembastDb.transaction((transaction) async {
+    await db.transaction((transaction) async {
       await sembastStore.records(ids).put(transaction, sembastValues);
       final batch = firestore.batch();
       for (var clone in clones) {
@@ -225,7 +225,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     final ids = clones.map((e) => e.id);
 
     // transaction
-    await sembastDb.transaction((transaction) async {
+    await db.transaction((transaction) async {
       await sembastStore.records(ids).delete(transaction);
       // sign deletion registry in a transaction to ensure it is deleted
       final batch = firestore.batch();
@@ -254,7 +254,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
   @override
   Future<List<T>> getAll() async {
     devLog('$debugDetails getAll');
-    final records = await sembastStore.find(sembastDb);
+    final records = await sembastStore.find(db);
     final objects = records.whereNotNull().map((e) => sembastMapper.fromMap(e.value));
     return objects.toList();
   }
@@ -262,7 +262,7 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
   @override
   Stream<List<T>> watchAll() {
     devLog('$debugDetails watchAll');
-    return sembastStore.query().onSnapshots(sembastDb).map((snapshots) {
+    return sembastStore.query().onSnapshots(db).map((snapshots) {
       return snapshots.map((record) {
         return sembastMapper.fromMap(record.value);
       }).toList();
@@ -305,8 +305,8 @@ abstract class FirestoreSyncedRepo<T extends SyncEntity> extends SyncedRepo<T> w
     if (batch == null) {
       throw Exception('batch must not be null');
     }
-    batch.update(syncService.deletionTypedCollection.doc(syncService.userId), {
-      'deletions.${syncService.deviceId}.$collectionPath': fs.FieldValue.arrayUnion(ids.toList()),
+    batch.update(syncService.registryTypedCollection.doc(syncService.userId), {
+      'deletions.${syncService.deviceId}.$path': fs.FieldValue.arrayUnion(ids.toList()),
     });
   }
 }

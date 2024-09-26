@@ -3,11 +3,12 @@ import 'fake_data.dart';
 
 class FakeFirestoreSyncedRepo extends FirestoreSyncedRepo<FakeSyncEntity> {
   FakeFirestoreSyncedRepo({
+    required super.path,
     required super.syncService,
-    required super.collectionPath,
-    required super.firestoreMapper,
-    required super.sembastMapper,
-  });
+  }) : super(
+          firestoreMapper: FakeFirestoreSyncEntityMapper(),
+          sembastMapper: FakeSembastSyncEntityMapper(),
+        );
 
   @override
   Future<DateTime> get currentTime async => DateTime.now().toUtc();
@@ -16,11 +17,9 @@ class FakeFirestoreSyncedRepo extends FirestoreSyncedRepo<FakeSyncEntity> {
 class FirestoreMockRemoteRepo extends FirestoreRemoteRepo<FakeSyncEntity> {
   FirestoreMockRemoteRepo({
     required super.syncService,
-    required super.collectionPath,
-    required super.firestoreMapper,
-  });
-
-  /// For equality checks, do not use utc because the conversion
-  @override
-  Future<DateTime> get currentTime async => DateTime.now().toUtc();
+    required super.path,
+    required super.collectionProvider,
+  }) : super(
+          firestoreMapper: FakeFirestoreSyncEntityMapper(),
+        );
 }

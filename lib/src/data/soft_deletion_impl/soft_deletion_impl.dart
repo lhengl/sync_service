@@ -16,4 +16,5 @@ part 'firestore_soft_remote_repo.dart';
 part 'firestore_soft_sync_delegate.dart';
 part 'firestore_soft_sync_service.dart';
 part 'firestore_soft_synced_repo.dart';
+part 'garbage_collector.dart';
 part 'soft_deletion_impl.mapper.dart';

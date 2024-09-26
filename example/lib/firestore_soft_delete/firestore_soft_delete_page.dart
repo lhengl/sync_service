@@ -14,8 +14,8 @@ class FirestoreSoftDeletePage extends GetView<FirestoreSoftDeleteController> {
                 title: const Text('Firestore Soft Delete Implementation'),
                 bottom: TabBar(tabs: [
                   Tab(child: Text('Remote')),
-                  Tab(child: Text(Constants.serviceA)),
-                  Tab(child: Text(Constants.serviceB)),
+                  Tab(child: Text(Constants.deviceA)),
+                  Tab(child: Text(Constants.deviceB)),
                   Tab(child: Text('Registry')),
                 ]),
               ),

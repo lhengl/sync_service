@@ -18,52 +18,30 @@ part of 'soft_deletion_impl.dart';
 /// - Will move the record to a trash collection to ensure deletion have a grace period for syncing
 /// - Always delete items using one of these methods to ensure deletions are synced across multiple devices.
 abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T> with Loggable {
+  FirestoreSoftSyncRepo({
+    required super.path,
+    required super.syncService,
+    required this.firestoreMapper,
+    required this.sembastMapper,
+  });
+
   // service
   @override
   FirestoreSoftSyncService get syncService => super.syncService as FirestoreSoftSyncService;
   fs.FirebaseFirestore get firestore => syncService.firestore;
-  sb.Database get db => syncService.sembastDb;
+  sb.Database get db => syncService.db;
 
-  // firestore
+  // mappers
   final JsonMapper<T> firestoreMapper;
-  late final fs.CollectionReference collection = firestore.collection(collectionPath);
-  late final fs.CollectionReference<T> typedCollection = collection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
-  );
-
-  // firestore deleted
-  String get trashCollectionPath => '${collectionPath}_trash';
-  late final fs.CollectionReference trashCollection = firestore.collection(trashCollectionPath);
-  late final fs.CollectionReference<T> trashTypedCollection = trashCollection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
-  );
-
-  // sembast
   final JsonMapper<T> sembastMapper;
-  late final sb.StoreRef<String, Map<String, dynamic>> store = sb.StoreRef(collectionPath);
-  late final sb.StoreRef<String, Map<String, dynamic>> trashStore = sb.StoreRef(trashCollectionPath);
 
-  final String createdAtField;
-  final String updatedAtField;
+  // collection
+  late final fs.CollectionReference<JsonObject> collection = firestore.collection(path);
+  late final sb.StoreRef<String, JsonObject> store = sb.StoreRef(path);
 
-  FirestoreSoftSyncRepo({
-    required super.collectionPath,
-    required super.syncService,
-    required this.firestoreMapper,
-    required this.sembastMapper,
-    this.createdAtField = 'createdAt',
-    this.updatedAtField = 'updatedAt',
-  });
+  // trash
+  late final fs.CollectionReference<JsonObject> trashCollection = firestore.collection(trashPath);
+  late final sb.StoreRef<String, JsonObject> trashStore = sb.StoreRef(trashPath);
 
   //////////// CRUD OPTIONS
 
@@ -79,16 +57,16 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
     devLog('$debugDetails create: id=${value.id}');
 
     // setup
-    final clone = value.clone();
+    final T clone = value.clone();
     if (clone.id.isEmpty) {
-      clone.id = typedCollection.doc().id;
+      clone.id = collection.doc().id;
     }
     clone.createdAt = clone.updatedAt = await currentTime;
 
     // transaction
     await db.transaction((transaction) async {
       await store.record(clone.id).put(transaction, sembastMapper.toMap(clone));
-      await typedCollection.doc(clone.id).set(clone);
+      await collection.doc(clone.id).set(firestoreMapper.toMap(clone));
     });
 
     return clone;
@@ -105,7 +83,7 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
     // transaction
     await db.transaction((transaction) async {
       await store.record(clone.id).put(transaction, sembastMapper.toMap(clone));
-      await typedCollection.doc(clone.id).set(clone, fs.SetOptions(merge: true));
+      await collection.doc(clone.id).set(firestoreMapper.toMap(clone), fs.SetOptions(merge: true));
     });
     return clone;
   }
@@ -130,8 +108,8 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
       await trashStore.record(clone.id).put(transaction, sembastMapper.toMap(clone));
       final batch = firestore.batch();
       // move to trash on remote
-      batch.set(trashTypedCollection.doc(clone.id), clone);
-      batch.delete(typedCollection.doc(clone.id));
+      batch.set(trashCollection.doc(clone.id), firestoreMapper.toMap(clone));
+      batch.delete(collection.doc(clone.id));
       await batch.commit();
     });
     return clone;
@@ -179,7 +157,7 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
     final sembastValues = clones.map((e) => sembastMapper.toMap(e)).toList();
     final batch = firestore.batch();
     for (var clone in clones) {
-      batch.set(typedCollection.doc(clone.id), clone);
+      batch.set(collection.doc(clone.id), firestoreMapper.toMap(clone));
     }
 
     // transaction
@@ -215,7 +193,7 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
       await store.records(ids).put(transaction, sembastValues);
       final batch = firestore.batch();
       for (var clone in clones) {
-        batch.set(typedCollection.doc(clone.id), clone, fs.SetOptions(merge: true));
+        batch.set(collection.doc(clone.id), firestoreMapper.toMap(clone), fs.SetOptions(merge: true));
       }
       await batch.commit();
     });
@@ -256,8 +234,8 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
       final batch = firestore.batch();
       for (var clone in clones) {
         // move to trash on remote
-        batch.set(trashTypedCollection.doc(clone.id), clone);
-        batch.delete(typedCollection.doc(clone.id));
+        batch.set(trashCollection.doc(clone.id), firestoreMapper.toMap(clone));
+        batch.delete(collection.doc(clone.id));
       }
       await batch.commit();
     });
@@ -313,7 +291,7 @@ abstract class FirestoreSoftSyncRepo<T extends SyncEntity> extends SyncedRepo<T>
     devLog('$debugDetails deleteAll: Deleted ${cachedDocs.length} from cache/remote documents');
 
     // Also retrieve documents from remote in case cache is not in sync
-    final remoteDocs = (await typedCollection.get()).data;
+    final remoteDocs = (await collection.get()).docs.map((e) => firestoreMapper.fromMap(e.data())).toList();
     if (remoteDocs.isEmpty) return cachedDocs;
     devLog('$debugDetails deleteAll: Found and deleted ${remoteDocs.length} remote documents not in cache.');
     await batchDelete(remoteDocs);

@@ -1,7 +1,7 @@
 part of 'firestore_deletion_registry.dart';
 
 class RemoteView extends GetView<FirestoreDeletionRegistryController> {
-  FirestoreMockRemoteRepo get remoteRepo => Get.find();
+  FakeFirestoreRemoteRepo get remoteRepo => controller.remoteRepo;
 
   const RemoteView({super.key});
 

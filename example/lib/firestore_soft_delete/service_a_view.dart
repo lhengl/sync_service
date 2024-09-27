@@ -3,7 +3,6 @@ part of 'firestore_soft_delete.dart';
 class SoftServiceAView extends GetView<FirestoreSoftDeleteController> {
   FirestoreSoftSyncService get syncServiceA => controller.syncServiceA;
   FakeFirestoreSoftSyncedRepo get syncedRepoA => controller.syncedRepoA;
-  GarbageCollector get garbageCollectorA => controller.garbageCollectorA;
 
   const SoftServiceAView({super.key});
 
@@ -43,7 +42,7 @@ class SoftServiceAView extends GetView<FirestoreSoftDeleteController> {
                 ),
           OutlinedButton(
             onPressed: () async {
-              await garbageCollectorA.disposeOldTrash();
+              await syncServiceA.disposeOldTrash();
             },
             child: const Text('Dispose old trash'),
           ),

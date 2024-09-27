@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sync_service/src/application/application.dart';
 import 'package:sync_service/src/data/data.dart';
+import 'package:sync_service/src/helpers/loggable.dart';
 
 // https://firebase.flutter.dev/docs/testing/testing/
 // https://pub.dev/packages/fake_cloud_firestore
@@ -14,47 +15,40 @@ void main() async {
   const deviceA = 'deviceA';
   const deviceB = 'deviceB';
   const deviceC = 'deviceC';
+  Loggable.testMode = true;
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
-  final collectionProvider = CollectionProvider(
-    collections: [
-      FirestoreCollectionInfo(
-        path: FakeSyncEntity.collectionPath,
-        syncQuery: (collection, userId) => collection,
-      ),
-    ],
+  final syncedRepoA = FakeFirestoreSyncRepo(
+    path: FakeSyncEntity.collectionPath,
+    syncQuery: (collection, userId) => collection,
+  );
+  final syncedRepoB = FakeFirestoreSyncRepo(
+    path: FakeSyncEntity.collectionPath,
+    syncQuery: (collection, userId) => collection,
+  );
+  final syncedRepoC = FakeFirestoreSyncRepo(
+    path: FakeSyncEntity.collectionPath,
+    syncQuery: (collection, userId) => collection,
   );
   final syncServiceA = await initSyncService(
     deviceId: deviceA,
     firestore: firestore,
-    collectionProvider: collectionProvider,
+    repo: syncedRepoA,
   );
   final syncServiceB = await initSyncService(
     deviceId: deviceB,
     firestore: firestore,
-    collectionProvider: collectionProvider,
+    repo: syncedRepoB,
   );
   final syncServiceC = await initSyncService(
     deviceId: deviceC,
     firestore: firestore,
-    collectionProvider: collectionProvider,
+    repo: syncedRepoC,
   );
   await syncServiceA.startSync(userId: user1);
   await syncServiceB.startSync(userId: user1);
   await syncServiceC.startSync(userId: user1);
 
-  final syncedRepoA = FakeFirestoreSyncedRepo(
-    path: FakeSyncEntity.collectionPath,
-    syncService: syncServiceA,
-  );
-  final syncedRepoB = FakeFirestoreSyncedRepo(
-    path: FakeSyncEntity.collectionPath,
-    syncService: syncServiceB,
-  );
-  final syncedRepoC = FakeFirestoreSyncedRepo(
-    path: FakeSyncEntity.collectionPath,
-    syncService: syncServiceC,
-  );
   tearDownAll(() async {
     await syncServiceA.databaseProvider.deleteDatabase();
     await syncServiceB.databaseProvider.deleteDatabase();
@@ -247,7 +241,7 @@ void main() async {
 Future<FirestoreSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
-  required CollectionProvider collectionProvider,
+  required FakeFirestoreSyncRepo repo,
 }) async {
   return FirestoreSyncService(
     databaseProvider: FakeDatabaseProvider(),
@@ -256,6 +250,6 @@ Future<FirestoreSyncService> initSyncService({
     firestore: firestore,
     // for testing purpose, make the debounce 3 seconds, to test the debounce make sure to delay more than 3 seconds
     signingDebounce: const Duration(seconds: 3),
-    collectionProvider: collectionProvider,
+    delegates: [repo],
   );
 }

@@ -1,11 +1,11 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 
-import '../../data/models/collection_info.dart';
 import '../../helpers/loggable.dart';
+import '../repos/synced_repo.dart';
 import 'device_id_provider.dart';
-import 'sync_delegate.dart';
 import 'timestamp_provider.dart';
 
 /// Sync service must be started each time a user logs into a session
@@ -31,21 +31,35 @@ abstract class SyncService with Loggable {
 
   /// A list of sync delegates that manages the syncing operation per collection.
   /// The order of this list dictates the order of sync operation.
-  final List<SyncDelegate> delegates;
+  final Map<String, SyncRepo> _delegateMap;
+  List<SyncRepo> get delegates => _delegateMap.values.toList();
+
+  T? get<T extends SyncRepo>(String path) {
+    final delegate = _delegateMap[path];
+    if (delegate is T) {
+      return delegate;
+    }
+    return null;
+  }
+
+  void registerDelegate(SyncRepo delegate) {
+    _delegateMap[delegate.path] = delegate;
+  }
+
+  void removeDelegate(String path) {
+    _delegateMap.remove(path);
+  }
 
   final DeviceIdProvider deviceIdProvider;
 
   final TimestampProvider timestampProvider;
 
-  final CollectionProvider collectionProvider;
-
   SyncService({
-    required this.delegates,
-    required this.collectionProvider,
+    required Iterable<SyncRepo> delegates,
     this.deviceIdProvider = const DeviceInfoDeviceIdProvider(),
     this.timestampProvider = const KronosTimestampProvider(),
-  }) {
-    // attach service to delegate and repo
+  }) : _delegateMap = delegates.lastBy((e) => e.path) {
+    // attach service to delegate
     for (var delegate in delegates) {
       delegate.attachService(this);
     }

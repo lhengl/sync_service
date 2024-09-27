@@ -19,9 +19,12 @@ part of 'soft_deletion_impl.dart';
 /// - Always delete items using one of these methods to ensure deletions are synced across multiple devices.
 abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
   FirestoreSoftRemoteRepo({
-    required super.path,
-    required super.collectionProvider,
     required this.firestore,
+    required super.path,
+    super.idField,
+    super.updateField,
+    super.createField,
+    super.timestampProvider,
     required this.firestoreMapper,
   });
 
@@ -270,6 +273,8 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     return allDocs;
   }
 
+  //////////// TRASH
+
   Future<List<T>> getTrash() async {
     devLog('getTrash');
     final snapshot = (await trashCollection.get());
@@ -286,6 +291,10 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
         return firestoreMapper.fromMap(doc.data());
       }).toList();
     });
+  }
+
+  Future<void> disposeOldTrash() async {
+    throw UnimplementedError();
   }
 
   Future<void> clearTrash() async {

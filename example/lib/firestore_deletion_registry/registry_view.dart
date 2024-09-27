@@ -4,7 +4,7 @@ class RegistryView extends GetView<FirestoreDeletionRegistryController> {
   const RegistryView({super.key});
 
   DeletionRegistry get registry => controller.registry.value;
-  SyncService get syncServiceA => Get.find(tag: Constants.serviceA);
+  SyncService get syncServiceA => controller.syncServiceA;
 
   @override
   Widget build(BuildContext context) {

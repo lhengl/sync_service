@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import '../../data/models/collection_info.dart';
 import '../../domain/entities/sync_entity.dart';
 import '../../helpers/helpers.dart';
 import '../services/timestamp_provider.dart';
@@ -12,21 +11,19 @@ import '../services/timestamp_provider.dart';
 /// in the remote repo for debugging purpose to imitate a delete from a remote source such as a web service.
 /// You must always sign a deletion even when deleting from a remote source.
 abstract class RemoteRepo<T extends SyncEntity> with Loggable {
-  RemoteRepo({
-    required String path,
-    required this.collectionProvider,
-    this.timestampProvider = const KronosTimestampProvider(),
-  }) : _path = path;
+  final String path;
+  String get trashPath => '${path}_trash';
+  final String idField;
+  final String updateField;
+  final String createField;
 
-  // collection provider
-  final String _path;
-  final CollectionProvider collectionProvider;
-  FirestoreCollectionInfo get collectionInfo => collectionProvider.get(_path)!;
-  String get path => _path;
-  String get trashPath => collectionInfo.trashPath;
-  String get idField => collectionInfo.idField;
-  String get updateField => collectionInfo.updateField;
-  String get createField => collectionInfo.createField;
+  RemoteRepo({
+    required this.path,
+    this.idField = 'id',
+    this.updateField = 'updatedAt',
+    this.createField = 'createdAt',
+    this.timestampProvider = const KronosTimestampProvider(),
+  });
 
   // timestamp provider
   final TimestampProvider timestampProvider;

@@ -1,34 +1,49 @@
 import 'dart:async';
 
-import 'package:sync_service/src/data/models/collection_info.dart';
+import 'package:sync_service/src/application/services/sync_service.dart';
 
 import '../../domain/entities/sync_entity.dart';
-import '../../helpers/helpers.dart';
-import '../services/sync_service.dart';
+import '../../helpers/loggable.dart';
 
-/// A synced repo assumes that the local database is synced by the SyncService so read from cache operation will
-/// result in the return of synced data. Additional method implementation should follow this assumption.
-abstract class SyncedRepo<T extends SyncEntity> with Loggable {
-  SyncedRepo({
-    required String path,
-    required this.syncService,
-  }) : _path = path;
+/// Each collection that requires sync must implement this class
+/// All synced data repository should implement [SyncRepo] interface to ensure data are read/write correctly
+/// following a standard approach to register the delete and read only from cache
+abstract class SyncRepo<T extends SyncEntity> with Loggable {
+  final String path;
+  String get trashPath => '${path}_trash';
+  final String idField;
+  final String updateField;
+  final String createField;
 
-  String get debugDetails => '[DeviceId:${syncService.deviceId}]';
+  SyncRepo({
+    required this.path,
+    this.idField = 'id',
+    this.updateField = 'updatedAt',
+    this.createField = 'createdAt',
+  });
 
-  // sync service
-  final SyncService syncService;
-  Future<DateTime> get currentTime async => syncService.currentTime;
-  CollectionProvider get collectionProvider => syncService.collectionProvider;
+  late SyncService _syncService;
+  SyncService get syncService => _syncService;
+  String get deviceId => _syncService.deviceId;
+  String get userId => syncService.userId;
 
-  // collection provider
-  final String _path;
-  FirestoreCollectionInfo get collectionInfo => collectionProvider.get(_path)!;
-  String get path => _path;
-  String get trashPath => collectionInfo.trashPath;
-  String get idField => collectionInfo.idField;
-  String get updateField => collectionInfo.updateField;
-  String get createField => collectionInfo.createField;
+  String get debugDetails => '[UID:$userId][DEVICE:$deviceId][COLLECTION:$path]';
+
+  /// This is called by SyncService to attach itself to the delegates
+  void attachService(SyncService service) {
+    _syncService = service;
+  }
+
+  Future<bool> get sessionIsReady;
+
+  /// Starts the sync operation when user logs in
+  Future<void> startSync();
+
+  /// Stops the sync operation when user logs out
+  Future<void> stopSync();
+
+  /// This method must be implemented to clear the cache when the sync state cannot be reconciled
+  Future<void> clearCache();
 
   // CRUD OPTIONS
 

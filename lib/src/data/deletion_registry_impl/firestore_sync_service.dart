@@ -30,45 +30,40 @@ class FirestoreSyncService extends SyncService with Loggable {
   final DatabaseProvider databaseProvider;
 
   FirestoreSyncService({
+    // services
     super.deviceIdProvider,
     super.timestampProvider,
-    required super.collectionProvider,
+
+    // delegate
+    required super.delegates,
+
+    // db
     required this.firestore,
+    required this.databaseProvider,
+
+    // registry
     this.registryPath = 'deletionRegistry',
-    DatabaseProvider? databaseProvider,
-    Duration? offlineDeviceTtl,
-    int? retriesOnFailure = 3,
-    Duration? retryInterval,
-    Duration? signingDebounce,
-  })  : offlineDeviceTtl = const Duration(days: 14),
-        retriesOnFailure = retriesOnFailure ?? 3,
-        retryInterval = retryInterval ?? const Duration(seconds: 3),
-        signingDebounce = signingDebounce ?? const Duration(minutes: 1),
-        databaseProvider = databaseProvider ?? DatabaseProvider(),
-        super(
-            delegates: collectionProvider.collections
-                .map(
-                  (collectionInfo) => FirestoreSyncDelegate(collectionInfo: collectionInfo),
-                )
-                .toList());
+
+    // options
+    this.retriesOnFailure = 3,
+    this.retryInterval = const Duration(seconds: 3),
+    this.offlineDeviceTtl = const Duration(days: 14),
+    this.signingDebounce = const Duration(minutes: 1),
+  });
 
   // firestore
   final fs.FirebaseFirestore firestore;
   sb.Database get db => databaseProvider.db;
 
   @override
-  List<FirestoreSyncDelegate> get delegates => super.delegates as List<FirestoreSyncDelegate>;
+  List<FirestoreSyncRepo> get delegates => super.delegates.whereType<FirestoreSyncRepo>().toList();
 
   final String registryPath;
   final FirestoreDeletionRegistryMapper _registryMapper = FirestoreDeletionRegistryMapper();
   late final fs.CollectionReference registryCollection = firestore.collection(registryPath);
   late final fs.CollectionReference<DeletionRegistry> registryTypedCollection = registryCollection.withConverter(
-    fromFirestore: (value, __) {
-      return _registryMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return _registryMapper.toMap(value);
-    },
+    fromFirestore: (value, __) => _registryMapper.fromMap(value.data()!),
+    toFirestore: (value, __) => _registryMapper.toMap(value),
   );
   @override
   Future<void> beforeStarting() async {

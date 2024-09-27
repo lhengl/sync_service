@@ -22,26 +22,31 @@ part of 'deletion_registry_impl.dart';
 abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
   FirestoreRemoteRepo({
     required super.path,
-    required super.collectionProvider,
-    super.timestampProvider,
+    super.idField,
+    super.updateField,
+    super.createField,
     required this.firestoreMapper,
+    // remote must be attached to a sync service in order to know the user id to sign deletion
     required this.syncService,
-  });
+  }) : super(timestampProvider: syncService.timestampProvider);
 
+  // service
   final FirestoreSyncService syncService;
+  String get deviceId => syncService.deviceId;
+  String get userId => syncService.userId;
+  fs.FirebaseFirestore get firestore => syncService.firestore;
 
   // firestore
-  fs.FirebaseFirestore get firestore => syncService.firestore;
   final JsonMapper<T> firestoreMapper;
   late final fs.CollectionReference collection = firestore.collection(path);
   late final fs.CollectionReference<T> typedCollection = collection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
+    fromFirestore: (value, __) => firestoreMapper.fromMap(value.data()!),
+    toFirestore: (value, __) => firestoreMapper.toMap(value),
   );
+
+  // registry
+  fs.CollectionReference get registryCollection => syncService.registryCollection;
+  fs.CollectionReference<DeletionRegistry> get registryTypedCollection => syncService.registryTypedCollection;
 
   //////////// CRUD OPTIONS
 
@@ -264,7 +269,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> w
   /// Doing so will sign the registry for deletion.
   /// However, if you need to delete a record outside of these default methods, ensure to call [signDeletions]
   /// as part of a batch operation. Otherwise the devices will go out of sync without notice.
-  /// [FirestoreSyncDelegate._watchRemoteChanges] will also sign the registry during a deletion,
+  /// [FirestoreSyncRepo._watchRemoteChanges] will also sign the registry during a deletion,
   /// but is only intended only for other devices not the same device. It does not guarantee atomicity.
   ///
   /// ----- SO DON'T FORGET to sign the registry on each deletion. ------
@@ -275,7 +280,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> w
     // When a remote repository is deleting, there is no deviceId attached.
     // But it still needs to be signed in order to let synced devices know to delete from cache.
     // For this reason, a remote repository will need to store this in a spoof device id called 'remote'
-    batch.update(syncService.registryTypedCollection.doc(syncService.userId), {
+    batch.update(registryTypedCollection.doc(userId), {
       'deletions.remote.$path': fs.FieldValue.arrayUnion(ids.toList()),
     });
   }

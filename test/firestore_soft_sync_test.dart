@@ -18,46 +18,39 @@ void main() async {
   Loggable.testMode = true;
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
-  final collectionProvider = CollectionProvider(
-    collections: [
-      FirestoreCollectionInfo(
-        path: FakeSyncEntity.collectionPath,
-        syncQuery: (collection, userId) => collection,
-      ),
-    ],
+
+  final syncedRepoA = FakeFirestoreSoftSyncedRepo(
+    path: FakeSyncEntity.collectionPath,
+    syncQuery: (collection, userId) => collection,
+  );
+  final syncedRepoB = FakeFirestoreSoftSyncedRepo(
+    path: FakeSyncEntity.collectionPath,
+    syncQuery: (collection, userId) => collection,
+  );
+  final syncedRepoC = FakeFirestoreSoftSyncedRepo(
+    path: FakeSyncEntity.collectionPath,
+    syncQuery: (collection, userId) => collection,
   );
 
   final syncServiceA = await initSyncService(
     deviceId: deviceA,
     firestore: firestore,
-    collectionProvider: collectionProvider,
+    repo: syncedRepoA,
   );
   final syncServiceB = await initSyncService(
     deviceId: deviceB,
     firestore: firestore,
-    collectionProvider: collectionProvider,
+    repo: syncedRepoB,
   );
   final syncServiceC = await initSyncService(
     deviceId: deviceC,
     firestore: firestore,
-    collectionProvider: collectionProvider,
+    repo: syncedRepoC,
   );
   await syncServiceA.startSync(userId: user1);
   await syncServiceB.startSync(userId: user1);
   await syncServiceC.startSync(userId: user1);
 
-  final syncedRepoA = FakeFirestoreSoftSyncedRepo(
-    syncService: syncServiceA,
-    path: FakeSyncEntity.collectionPath,
-  );
-  final syncedRepoB = FakeFirestoreSoftSyncedRepo(
-    syncService: syncServiceB,
-    path: FakeSyncEntity.collectionPath,
-  );
-  final syncedRepoC = FakeFirestoreSoftSyncedRepo(
-    syncService: syncServiceC,
-    path: FakeSyncEntity.collectionPath,
-  );
   tearDownAll(() async {
     await syncServiceA.databaseProvider.deleteDatabase();
     await syncServiceB.databaseProvider.deleteDatabase();
@@ -183,21 +176,16 @@ void main() async {
 Future<FirestoreSoftSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
-  required CollectionProvider collectionProvider,
+  required FakeFirestoreSoftSyncedRepo repo,
 }) async {
   final databaseProvider = FakeDatabaseProvider();
   return FirestoreSoftSyncService(
+    firestore: firestore,
     databaseProvider: databaseProvider,
     timestampProvider: const FakeTimeStampProvider(),
     deviceIdProvider: FakeDeviceIdProvider(deviceId),
-    firestore: firestore,
-    collectionProvider: collectionProvider,
-    garbageCollector: GarbageCollector(
-      disposalAge: const Duration(seconds: 5), // for testing, disposal age is kept at 5 seconds
-      collectionProvider: collectionProvider,
-      firestore: firestore,
-      databaseProvider: databaseProvider,
-      timestampProvider: const FakeTimeStampProvider(),
-    ),
+    // for testing, disposal age is kept at 5 seconds
+    disposalAge: const Duration(seconds: 5),
+    delegates: [repo],
   );
 }

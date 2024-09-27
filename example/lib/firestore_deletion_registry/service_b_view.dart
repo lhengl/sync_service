@@ -1,9 +1,8 @@
 part of 'firestore_deletion_registry.dart';
 
 class ServiceBView extends GetView<FirestoreDeletionRegistryController> {
-  FirestoreSyncService get syncServiceB => Get.find(tag: Constants.serviceB);
-
-  FakeFirestoreSyncedRepo get syncedRepo => Get.find(tag: Constants.serviceB);
+  FirestoreSyncService get syncServiceB => controller.syncServiceB;
+  FakeFirestoreSyncRepo get syncedRepoB => controller.syncedRepoB;
 
   const ServiceBView({super.key});
 
@@ -14,13 +13,13 @@ class ServiceBView extends GetView<FirestoreDeletionRegistryController> {
         children: [
           OutlinedButton(
             onPressed: () {
-              syncedRepo.create(controller.generateRandomData());
+              syncedRepoB.create(controller.generateRandomData());
             },
             child: const Text('Create a data via synced repo'),
           ),
           OutlinedButton(
             onPressed: () async {
-              await syncedRepo.deleteAll();
+              await syncedRepoB.deleteAll();
             },
             child: const Text('Delete all data in cache'),
           ),

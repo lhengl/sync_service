@@ -16,6 +16,5 @@ import '../../helpers/helpers.dart';
 part 'deletion_registry.dart';
 part 'deletion_registry_impl.mapper.dart';
 part 'firestore_remote_repo.dart';
-part 'firestore_sync_delegate.dart';
+part 'firestore_sync_repo.dart';
 part 'firestore_sync_service.dart';
-part 'firestore_synced_repo.dart';

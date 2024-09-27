@@ -159,6 +159,7 @@ class GarbageCollector with Loggable {
         disposalCutoff: calculateDisposalCutoff(await currentTime),
       );
       await doc.set(registry);
+      devLog('getOrSetRegistry: created new registry: $registry');
     }
     return registry;
   }

@@ -28,24 +28,24 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
   // firestore
   final fs.FirebaseFirestore firestore;
   final JsonMapper<T> firestoreMapper;
-  late final fs.CollectionReference collection = firestore.collection(path);
-  late final fs.CollectionReference<T> typedCollection = collection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
-  );
-  late final fs.CollectionReference trashCollection = firestore.collection(trashPath);
-  late final fs.CollectionReference<T> trashTypedCollection = trashCollection.withConverter(
-    fromFirestore: (value, __) {
-      return firestoreMapper.fromMap(value.data()!);
-    },
-    toFirestore: (value, __) {
-      return firestoreMapper.toMap(value);
-    },
-  );
+  late final fs.CollectionReference<JsonObject> collection = firestore.collection(path);
+  // late final fs.CollectionReference<T> typedCollection = collection.withConverter(
+  //   fromFirestore: (value, __) {
+  //     return firestoreMapper.fromMap(value.data()!);
+  //   },
+  //   toFirestore: (value, __) {
+  //     return firestoreMapper.toMap(value);
+  //   },
+  // );
+  late final fs.CollectionReference<JsonObject> trashCollection = firestore.collection(trashPath);
+  // late final fs.CollectionReference<T> trashTypedCollection = trashCollection.withConverter(
+  //   fromFirestore: (value, __) {
+  //     return firestoreMapper.fromMap(value.data()!);
+  //   },
+  //   toFirestore: (value, __) {
+  //     return firestoreMapper.toMap(value);
+  //   },
+  // );
 
   //////////// CRUD OPTIONS
 
@@ -53,8 +53,8 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
   Future<T?> get(String id) async {
     devLog('get: id=$id');
     try {
-      final snapshot = await typedCollection.doc(id).get();
-      return snapshot.data();
+      final snapshot = await collection.doc(id).get();
+      return firestoreMapper.fromMapOrNull(snapshot.data());
     } catch (error, stacktrace) {
       devLog('Error retrieving document.', error: error, stackTrace: stacktrace);
       rethrow;
@@ -68,13 +68,13 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     // setup
     final clone = value.clone();
     if (clone.id.isEmpty) {
-      clone.id = typedCollection.doc().id;
+      clone.id = collection.doc().id;
     }
     clone.createdAt = clone.updatedAt = await currentTime;
 
     // write
 
-    await typedCollection.doc(clone.id).set(clone);
+    await collection.doc(clone.id).set(firestoreMapper.toMap(clone));
     return clone;
   }
 
@@ -87,7 +87,7 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     clone.updatedAt = await currentTime;
 
     // write
-    await typedCollection.doc(clone.id).set(clone, fs.SetOptions(merge: true));
+    await collection.doc(clone.id).set(firestoreMapper.toMap(clone), fs.SetOptions(merge: true));
     return clone;
   }
 
@@ -107,8 +107,8 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
 
     // batch
     final batch = firestore.batch();
-    batch.set(trashTypedCollection.doc(clone.id), clone);
-    batch.delete(typedCollection.doc(clone.id));
+    batch.set(trashCollection.doc(clone.id), firestoreMapper.toMap(clone));
+    batch.delete(collection.doc(clone.id));
     await batch.commit();
     return clone;
   }
@@ -133,14 +133,15 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     }
     List<List<String>> idBatches = splitBatch(ids);
     final futures = idBatches.map((idBatch) {
-      return typedCollection.where(fs.FieldPath.documentId, whereIn: idBatch).get();
+      return collection.where(fs.FieldPath.documentId, whereIn: idBatch).get();
     });
     final result = await Future.wait(futures);
     final docs = result.map((snapshot) {
       return snapshot.data;
     });
-    final expanded = docs.expand((e) => e).toList();
-    return expanded;
+    final expanded = docs.expand((e) => e);
+    final values = expanded.map((e) => firestoreMapper.fromMap(e)).toList();
+    return values;
   }
 
   @override
@@ -162,7 +163,7 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     // batch
     final batch = firestore.batch();
     for (var clone in clones) {
-      batch.set(typedCollection.doc(clone.id), clone);
+      batch.set(collection.doc(clone.id), firestoreMapper.toMap(clone));
     }
     await batch.commit();
 
@@ -189,10 +190,9 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     final ids = clones.map((e) => e.id);
 
     // batch
-
     final batch = firestore.batch();
     for (var clone in clones) {
-      batch.set(typedCollection.doc(clone.id), clone, fs.SetOptions(merge: true));
+      batch.set(collection.doc(clone.id), firestoreMapper.toMap(clone), fs.SetOptions(merge: true));
     }
     await batch.commit();
 
@@ -225,8 +225,8 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     // batch
     final batch = firestore.batch();
     for (var clone in clones) {
-      batch.set(trashTypedCollection.doc(clone.id), clone);
-      batch.delete(typedCollection.doc(clone.id));
+      batch.set(trashCollection.doc(clone.id), firestoreMapper.toMap(clone));
+      batch.delete(collection.doc(clone.id));
     }
     await batch.commit();
     devLog('batchDelete: ${ids.length} documents deleted successfully!: $ids');
@@ -245,14 +245,20 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
   @override
   Future<List<T>> getAll() async {
     devLog('getAll');
-    final snapshot = await typedCollection.get();
-    return snapshot.data;
+    final snapshot = await collection.get();
+    return snapshot.docs.map((doc) {
+      return firestoreMapper.fromMap(doc.data());
+    }).toList();
   }
 
   @override
   Stream<List<T>> watchAll() {
     devLog('watchAll');
-    return typedCollection.snapshots().map((e) => e.data);
+    return collection.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return firestoreMapper.fromMap(doc.data());
+      }).toList();
+    });
   }
 
   @override
@@ -266,21 +272,29 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
 
   Future<List<T>> getTrash() async {
     devLog('getTrash');
-    return (await trashTypedCollection.get()).data;
+    final snapshot = (await trashCollection.get());
+    final docs = snapshot.docs.map((doc) {
+      return firestoreMapper.fromMap(doc.data());
+    }).toList();
+    return docs;
   }
 
   Stream<List<T>> watchTrash() {
     devLog('watchTrash');
-    return trashTypedCollection.snapshots().map((e) => e.data);
+    return trashCollection.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return firestoreMapper.fromMap(doc.data());
+      }).toList();
+    });
   }
 
   Future<void> clearTrash() async {
     devLog('clearTrash');
-    final trash = (await trashTypedCollection.get()).data;
-    final trashIds = trash.map((e) => e.id);
+    final snapshot = (await trashCollection.get());
+    final trashIds = snapshot.docs.map((doc) => doc.id);
     final batch = firestore.batch();
     for (var trashId in trashIds) {
-      batch.delete(trashTypedCollection.doc(trashId));
+      batch.delete(trashCollection.doc(trashId));
     }
     await batch.commit();
   }

@@ -55,7 +55,6 @@ class FirestoreSoftSyncService extends SyncService with Loggable {
     await updateCache();
 
     devLog('$debugDetails beforeStarting: disposing old records from trash...');
-
     await garbageCollector.disposeOldTrash();
   }
 

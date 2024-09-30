@@ -37,6 +37,8 @@ class FakeSyncEntity extends SyncEntity with FakeSyncEntityMappable {
 }
 
 class FakeFirestoreSyncEntityMapper extends JsonMapper<FakeSyncEntity> {
+  const FakeFirestoreSyncEntityMapper();
+
   @override
   FakeSyncEntity fromMap(Map<String, dynamic> map) {
     return FakeSyncEntity.fromMap(map);
@@ -49,6 +51,8 @@ class FakeFirestoreSyncEntityMapper extends JsonMapper<FakeSyncEntity> {
 }
 
 class FakeSembastSyncEntityMapper extends JsonMapper<FakeSyncEntity> {
+  const FakeSembastSyncEntityMapper();
+
   @override
   FakeSyncEntity fromMap(Map<String, dynamic> map) {
     return FakeSyncEntity.fromMap(map);

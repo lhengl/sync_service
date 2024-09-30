@@ -4,8 +4,8 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'firestore_deletion_registry/firestore_deletion_registry.dart';
-import 'firestore_soft_delete/firestore_soft_delete.dart';
+import 'firestore_hard_deletion/firestore_hard_deletion.dart';
+import 'firestore_soft_deletion/firestore_soft_deletion.dart';
 
 void main() {
   runZonedGuarded(() {
@@ -39,9 +39,9 @@ class HomePage extends StatelessWidget {
           OutlinedButton(
             onPressed: () {
               Get.to(
-                FirestoreDeletionRegistryPage(),
+                FirestoreHardDeletionPage(),
                 binding: BindingsBuilder(() {
-                  Get.put(FirestoreDeletionRegistryController());
+                  Get.put(FirestoreHardDeletionController());
                 }),
               );
             },
@@ -50,9 +50,9 @@ class HomePage extends StatelessWidget {
           OutlinedButton(
             onPressed: () {
               Get.to(
-                FirestoreSoftDeletePage(),
+                FirestoreSoftDeletionPage(),
                 binding: BindingsBuilder(() {
-                  Get.put(FirestoreSoftDeleteController());
+                  Get.put(FirestoreSoftDeletionController());
                 }),
               );
             },

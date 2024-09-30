@@ -6,15 +6,18 @@ import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_io.dart';
 import 'package:sembast/sembast_memory.dart';
 
-/// A class for managing local database
-class DatabaseProvider {
+import '../../application/services/database_provider.dart';
+
+class SembastDatabaseProvider extends DatabaseProvider<Database> {
   Database? _db;
 
   /// Returns the current db, throws if null
+  @override
   Database get db {
     return _db!;
   }
 
+  @override
   Future<Database> openDatabase({
     required String userId,
   }) async {
@@ -39,10 +42,12 @@ class DatabaseProvider {
     }
   }
 
+  @override
   Future<void> closeDatabase() async {
     await _db?.close();
   }
 
+  @override
   Future<void> deleteDatabase() async {
     await _db?.close();
     if (_db != null) {
@@ -52,16 +57,26 @@ class DatabaseProvider {
 }
 
 class FakeDatabaseProvider extends DatabaseProvider {
-  late Database _mockDb;
+  Database? _mockDb;
 
   @override
-  Database get db => _mockDb;
+  Database get db => _mockDb!;
   @override
   Future<Database> openDatabase({
     String? userId,
-    String? deviceId,
   }) async {
-    _mockDb = await newDatabaseFactoryMemory().openDatabase('${deviceId}_$userId.db');
-    return _mockDb;
+    _mockDb = await newDatabaseFactoryMemory().openDatabase('$userId.db');
+    return _mockDb!;
+  }
+
+  @override
+  Future<void> closeDatabase() async {
+    await _mockDb?.close();
+  }
+
+  @override
+  Future<void> deleteDatabase() async {
+    await _mockDb?.close();
+    _mockDb = null;
   }
 }

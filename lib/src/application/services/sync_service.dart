@@ -4,7 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../../helpers/loggable.dart';
-import '../repos/synced_repo.dart';
+import '../repos/sync_repo.dart';
 import 'device_id_provider.dart';
 import 'timestamp_provider.dart';
 

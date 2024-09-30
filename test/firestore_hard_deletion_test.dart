@@ -19,13 +19,13 @@ void main() async {
   Loggable.testMode = true;
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
-  final syncedRepoA = FakeFirestoreSyncRepo(
+  final syncedRepoA = FakeFirestoreHardSyncRepo(
     syncQuery: (collection, userId) => collection,
   );
-  final syncedRepoB = FakeFirestoreSyncRepo(
+  final syncedRepoB = FakeFirestoreHardSyncRepo(
     syncQuery: (collection, userId) => collection,
   );
-  final syncedRepoC = FakeFirestoreSyncRepo(
+  final syncedRepoC = FakeFirestoreHardSyncRepo(
     syncQuery: (collection, userId) => collection,
   );
   final syncServiceA = await initSyncService(
@@ -230,12 +230,12 @@ void main() async {
   });
 }
 
-Future<FirestoreSyncService> initSyncService({
+Future<FirestoreHardSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
-  required FakeFirestoreSyncRepo repo,
+  required FakeFirestoreHardSyncRepo repo,
 }) async {
-  return FirestoreSyncService(
+  return FirestoreHardSyncService(
     databaseProvider: FakeDatabaseProvider(),
     timestampProvider: const FakeTimeStampProvider(),
     deviceIdProvider: FakeDeviceIdProvider(deviceId),

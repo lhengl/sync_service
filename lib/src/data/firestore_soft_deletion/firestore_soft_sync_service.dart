@@ -53,8 +53,8 @@ class FirestoreSoftSyncService extends SyncService with FirestoreTrashMixin, Log
     required super.delegates,
 
     // dbs
-    required this.firestore,
-    required this.databaseProvider,
+    fs.FirebaseFirestore? firestore,
+    DatabaseProvider? databaseProvider,
 
     // trash
     this.disposalAge = const Duration(days: 14),
@@ -63,7 +63,8 @@ class FirestoreSoftSyncService extends SyncService with FirestoreTrashMixin, Log
     // options
     this.retriesOnFailure = 3,
     this.retryInterval = const Duration(seconds: 3),
-  });
+  })  : firestore = firestore ?? fs.FirebaseFirestore.instance,
+        databaseProvider = databaseProvider ?? SembastDatabaseProvider();
 
   // firestore
   @override

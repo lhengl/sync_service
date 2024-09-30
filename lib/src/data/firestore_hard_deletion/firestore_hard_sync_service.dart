@@ -2,7 +2,7 @@ part of 'firestore_hard_deletion.dart';
 
 /// Sync service must be started each time a user logs into a session
 /// It manages the lifecycle of each sync delegate during the user session
-class FirestoreSyncService extends SyncService with Loggable {
+class FirestoreHardSyncService extends SyncService with Loggable {
   /// This is the time to live duration that a device can be offline before its cache may be invalidated.
   ///
   /// The reason why we need this is because if a device goes offline indefinitely,
@@ -29,7 +29,7 @@ class FirestoreSyncService extends SyncService with Loggable {
 
   final DatabaseProvider databaseProvider;
 
-  FirestoreSyncService({
+  FirestoreHardSyncService({
     // services
     super.deviceIdProvider,
     super.timestampProvider,
@@ -38,8 +38,8 @@ class FirestoreSyncService extends SyncService with Loggable {
     required super.delegates,
 
     // db
-    required this.firestore,
-    required this.databaseProvider,
+    fs.FirebaseFirestore? firestore,
+    DatabaseProvider? databaseProvider,
 
     // registry
     this.registryPath = 'deletionRegistry',
@@ -49,14 +49,15 @@ class FirestoreSyncService extends SyncService with Loggable {
     this.retryInterval = const Duration(seconds: 3),
     this.offlineDeviceTtl = const Duration(days: 14),
     this.signingDebounce = const Duration(minutes: 1),
-  });
+  })  : firestore = firestore ?? fs.FirebaseFirestore.instance,
+        databaseProvider = databaseProvider ?? SembastDatabaseProvider();
 
   // firestore
   final fs.FirebaseFirestore firestore;
   sb.Database get db => databaseProvider.db;
 
   @override
-  List<FirestoreSyncRepo> get delegates => super.delegates.whereType<FirestoreSyncRepo>().toList();
+  List<FirestoreHardSyncRepo> get delegates => super.delegates.whereType<FirestoreHardSyncRepo>().toList();
 
   final String registryPath;
   final FirestoreDeletionRegistryMapper _registryMapper = FirestoreDeletionRegistryMapper();

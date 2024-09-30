@@ -5,14 +5,14 @@ class FirestoreSoftDeletionController extends GetxController with StateMixin {
 
   // Device A
   late final FirestoreSoftSyncService syncServiceA;
-  late final FakeFirestoreSoftSyncedRepo syncedRepoA;
+  late final FakeFirestoreSoftSyncRepo syncedRepoA;
   final Rx<SyncState> syncStateA = SyncState.stopped.obs;
   final RxList<FakeSyncEntity> syncedDataA = <FakeSyncEntity>[].obs;
   final RxList<FakeSyncEntity> trashDataA = <FakeSyncEntity>[].obs;
 
   // Device B
   late final FirestoreSoftSyncService syncServiceB;
-  late final FakeFirestoreSoftSyncedRepo syncedRepoB;
+  late final FakeFirestoreSoftSyncRepo syncedRepoB;
   final Rx<SyncState> syncStateB = SyncState.stopped.obs;
   final RxList<FakeSyncEntity> syncedDataB = <FakeSyncEntity>[].obs;
   final RxList<FakeSyncEntity> trashDataB = <FakeSyncEntity>[].obs;
@@ -39,7 +39,7 @@ class FirestoreSoftDeletionController extends GetxController with StateMixin {
       deviceIdProvider: FakeDeviceIdProvider(Constants.deviceA),
       disposalAge: 5.seconds, // for testing, disposal age is kept at 5 seconds
       delegates: [
-        syncedRepoA = FakeFirestoreSoftSyncedRepo(
+        syncedRepoA = FakeFirestoreSoftSyncRepo(
           userQuery: (collection, userId) => collection,
         ),
       ],
@@ -52,7 +52,7 @@ class FirestoreSoftDeletionController extends GetxController with StateMixin {
       deviceIdProvider: FakeDeviceIdProvider(Constants.deviceB),
       disposalAge: 5.seconds, // for testing, disposal age is kept at 5 seconds
       delegates: [
-        syncedRepoB = FakeFirestoreSoftSyncedRepo(
+        syncedRepoB = FakeFirestoreSoftSyncRepo(
           userQuery: (collection, userId) => collection,
         ),
       ],

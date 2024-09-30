@@ -19,8 +19,8 @@ part of 'firestore_hard_deletion.dart';
 /// - Will sign the deletion on the deletion registry to ensure deletions are synced
 /// - It is important to always sign the deletion to avoid stale/deleted data living forever rent free in cache
 /// - Always sign deletion in a batch operation by calling [signDeletions] to ensure atomicity
-abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
-  FirestoreRemoteRepo({
+abstract class FirestoreHardRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> with FirestoreHelper {
+  FirestoreHardRemoteRepo({
     required super.path,
     super.idField,
     super.updateField,
@@ -31,7 +31,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> w
   }) : super(timestampProvider: syncService.timestampProvider);
 
   // service
-  final FirestoreSyncService syncService;
+  final FirestoreHardSyncService syncService;
   String get deviceId => syncService.deviceId;
   String get userId => syncService.userId;
   fs.FirebaseFirestore get firestore => syncService.firestore;
@@ -269,7 +269,7 @@ abstract class FirestoreRemoteRepo<T extends SyncEntity> extends RemoteRepo<T> w
   /// Doing so will sign the registry for deletion.
   /// However, if you need to delete a record outside of these default methods, ensure to call [signDeletions]
   /// as part of a batch operation. Otherwise the devices will go out of sync without notice.
-  /// [FirestoreSyncRepo._watchRemoteChanges] will also sign the registry during a deletion,
+  /// [FirestoreHardSyncRepo._watchRemoteChanges] will also sign the registry during a deletion,
   /// but is only intended only for other devices not the same device. It does not guarantee atomicity.
   ///
   /// ----- SO DON'T FORGET to sign the registry on each deletion. ------

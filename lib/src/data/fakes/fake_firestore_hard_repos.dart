@@ -1,8 +1,8 @@
 import '../firestore_hard_deletion/firestore_hard_deletion.dart';
 import 'fake_data.dart';
 
-class FakeFirestoreSyncRepo extends FirestoreSyncRepo<FakeSyncEntity> {
-  FakeFirestoreSyncRepo({
+class FakeFirestoreHardSyncRepo extends FirestoreHardSyncRepo<FakeSyncEntity> {
+  FakeFirestoreHardSyncRepo({
     super.path = FakeSyncEntity.collectionPath,
     required super.syncQuery,
     super.idField,
@@ -13,7 +13,7 @@ class FakeFirestoreSyncRepo extends FirestoreSyncRepo<FakeSyncEntity> {
   });
 }
 
-class FakeFirestoreRemoteRepo extends FirestoreRemoteRepo<FakeSyncEntity> {
+class FakeFirestoreRemoteRepo extends FirestoreHardRemoteRepo<FakeSyncEntity> {
   FakeFirestoreRemoteRepo({
     super.path = FakeSyncEntity.collectionPath,
     super.idField,

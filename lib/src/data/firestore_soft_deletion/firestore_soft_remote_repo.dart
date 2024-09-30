@@ -20,7 +20,7 @@ part of 'firestore_soft_deletion.dart';
 abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<T>
     with FirestoreTrashMixin, FirestoreHelper {
   FirestoreSoftRemoteRepo({
-    required this.firestore,
+    fs.FirebaseFirestore? firestore,
     required super.path,
     super.idField,
     super.updateField,
@@ -30,7 +30,7 @@ abstract class FirestoreSoftRemoteRepo<T extends SyncEntity> extends RemoteRepo<
     required this.userTrashQuery,
     this.disposalAge = const Duration(days: 14),
     this.trashRegistryPath = 'trashRegistry',
-  });
+  }) : firestore = firestore ?? fs.FirebaseFirestore.instance;
 
   @override
   final Duration disposalAge;

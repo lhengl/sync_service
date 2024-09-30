@@ -19,13 +19,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final firestore = FakeFirebaseFirestore();
 
-  final syncedRepoA = FakeFirestoreSoftSyncedRepo(
+  final syncedRepoA = FakeFirestoreSoftSyncRepo(
     userQuery: (collection, userId) => collection,
   );
-  final syncedRepoB = FakeFirestoreSoftSyncedRepo(
+  final syncedRepoB = FakeFirestoreSoftSyncRepo(
     userQuery: (collection, userId) => collection,
   );
-  final syncedRepoC = FakeFirestoreSoftSyncedRepo(
+  final syncedRepoC = FakeFirestoreSoftSyncRepo(
     userQuery: (collection, userId) => collection,
   );
 
@@ -173,7 +173,7 @@ void main() async {
 Future<FirestoreSoftSyncService> initSyncService({
   required String deviceId,
   required FirebaseFirestore firestore,
-  required FakeFirestoreSoftSyncedRepo repo,
+  required FakeFirestoreSoftSyncRepo repo,
 }) async {
   final databaseProvider = FakeDatabaseProvider();
   return FirestoreSoftSyncService(

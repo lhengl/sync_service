@@ -1,8 +1,8 @@
 part of 'firestore_hard_deletion.dart';
 
 class ServiceAView extends GetView<FirestoreHardDeletionController> {
-  FirestoreSyncService get syncServiceA => controller.syncServiceA;
-  FakeFirestoreSyncRepo get syncedRepoA => controller.syncedRepoA;
+  FirestoreHardSyncService get syncServiceA => controller.syncServiceA;
+  FakeFirestoreHardSyncRepo get syncedRepoA => controller.syncedRepoA;
 
   const ServiceAView({super.key});
 

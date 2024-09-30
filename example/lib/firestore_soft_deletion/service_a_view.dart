@@ -2,7 +2,7 @@ part of 'firestore_soft_deletion.dart';
 
 class SoftServiceAView extends GetView<FirestoreSoftDeletionController> {
   FirestoreSoftSyncService get syncServiceA => controller.syncServiceA;
-  FakeFirestoreSoftSyncedRepo get syncedRepoA => controller.syncedRepoA;
+  FakeFirestoreSoftSyncRepo get syncedRepoA => controller.syncedRepoA;
 
   const SoftServiceAView({super.key});
 

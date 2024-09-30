@@ -1,8 +1,8 @@
 import '../firestore_soft_deletion/firestore_soft_deletion.dart';
 import 'fake_data.dart';
 
-class FakeFirestoreSoftSyncedRepo extends FirestoreSoftSyncRepo<FakeSyncEntity> {
-  FakeFirestoreSoftSyncedRepo({
+class FakeFirestoreSoftSyncRepo extends FirestoreSoftSyncRepo<FakeSyncEntity> {
+  FakeFirestoreSoftSyncRepo({
     super.path = FakeSyncEntity.collectionPath,
     required super.userQuery,
     super.idField,

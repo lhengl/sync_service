@@ -26,7 +26,7 @@ part of 'firestore_hard_deletion.dart';
 /// - Will sign the deletion on the deletion registry to ensure deletions are synced
 /// - It is important to always sign the deletion to avoid stale/deleted data living forever rent free in cache
 /// - Always sign deletion in a batch operation by calling [signDeletions] to ensure atomicity
-class FirestoreSyncRepo<T extends SyncEntity> extends SyncRepo<T> with Loggable {
+class FirestoreHardSyncRepo<T extends SyncEntity> extends SyncRepo<T> with Loggable {
   /// A callback to retrieve the sync query for this delegate/collection
   final FirestoreUserQuery<T> syncQuery;
 
@@ -34,7 +34,7 @@ class FirestoreSyncRepo<T extends SyncEntity> extends SyncRepo<T> with Loggable 
   final JsonMapper<T> firestoreMapper;
   final JsonMapper<T> sembastMapper;
 
-  FirestoreSyncRepo({
+  FirestoreHardSyncRepo({
     required super.path,
     super.idField,
     super.updateField,
@@ -46,7 +46,7 @@ class FirestoreSyncRepo<T extends SyncEntity> extends SyncRepo<T> with Loggable 
 
   // service
   @override
-  FirestoreSyncService get syncService => super.syncService as FirestoreSyncService;
+  FirestoreHardSyncService get syncService => super.syncService as FirestoreHardSyncService;
   Future<DateTime> get currentTime async => syncService.currentTime;
   fs.FirebaseFirestore get firestore => syncService.firestore;
   sb.Database get db => syncService.db;
@@ -419,7 +419,7 @@ class FirestoreSyncRepo<T extends SyncEntity> extends SyncRepo<T> with Loggable 
   /// Doing so will sign the registry for deletion.
   /// However, if you need to delete a record outside of these default methods, ensure to call [signDeletions]
   /// as part of a batch operation. Otherwise the devices will go out of sync without notice.
-  /// [FirestoreSyncRepo._watchRemoteChanges] will also sign the registry during a deletion,
+  /// [FirestoreHardSyncRepo._watchRemoteChanges] will also sign the registry during a deletion,
   /// but is only intended only for other devices not the same device. It does not guarantee atomicity.
   ///
   /// ----- SO DON'T FORGET to sign the registry on each deletion. ------

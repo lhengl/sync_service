@@ -4,14 +4,14 @@ class FirestoreHardDeletionController extends GetxController with StateMixin {
   late final FakeFirebaseFirestore firestore;
 
   // Device A
-  late final FirestoreSyncService syncServiceA;
-  late final FakeFirestoreSyncRepo syncedRepoA;
+  late final FirestoreHardSyncService syncServiceA;
+  late final FakeFirestoreHardSyncRepo syncedRepoA;
   final Rx<SyncState> syncStateA = SyncState.stopped.obs;
   final RxList<FakeSyncEntity> syncedDataA = <FakeSyncEntity>[].obs;
 
   // Device B
-  late final FirestoreSyncService syncServiceB;
-  late final FakeFirestoreSyncRepo syncedRepoB;
+  late final FirestoreHardSyncService syncServiceB;
+  late final FakeFirestoreHardSyncRepo syncedRepoB;
   final Rx<SyncState> syncStateB = SyncState.stopped.obs;
   final RxList<FakeSyncEntity> syncedDataB = <FakeSyncEntity>[].obs;
 
@@ -29,27 +29,27 @@ class FirestoreHardDeletionController extends GetxController with StateMixin {
     firestore = FakeFirebaseFirestore();
 
     // DEVICE A
-    syncServiceA = FirestoreSyncService(
+    syncServiceA = FirestoreHardSyncService(
       firestore: firestore,
       databaseProvider: FakeDatabaseProvider(),
       // make the signing debounce shorter for testing purpose
       signingDebounce: Duration(seconds: 5),
       delegates: [
-        syncedRepoA = FakeFirestoreSyncRepo(
+        syncedRepoA = FakeFirestoreHardSyncRepo(
           syncQuery: (collection, userId) => collection,
         ),
       ],
     );
 
     // DEVICE B
-    syncServiceB = FirestoreSyncService(
+    syncServiceB = FirestoreHardSyncService(
       firestore: firestore,
       // make the signing debounce shorter for testing purpose
       signingDebounce: Duration(seconds: 5),
       databaseProvider: FakeDatabaseProvider(),
       deviceIdProvider: FakeDeviceIdProvider(Constants.deviceB),
       delegates: [
-        syncedRepoB = FakeFirestoreSyncRepo(
+        syncedRepoB = FakeFirestoreHardSyncRepo(
           syncQuery: (collection, userId) => collection,
         ),
       ],

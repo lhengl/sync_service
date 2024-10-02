@@ -1,4 +1,4 @@
-abstract class SyncEntity {
+abstract mixin class SyncEntity {
   abstract String id;
   abstract DateTime createdAt;
   abstract DateTime updatedAt;
